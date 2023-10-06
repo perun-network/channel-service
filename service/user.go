@@ -54,14 +54,15 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 
 func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) {
 	proposal.Base()
-	// FIXME: Make protobuf type for client.ChannelProposal and use it in OpenChannel.
+	// FIXME: Make protobuf type for client.ChannelProposal and use it in OpenChannel. There might be an existing protobuf type for client.ChannelProposal.
 	panic("fixme")
 	// FIXME: OpenChannel needs OpenChannelResponse as return type!
-	// wcs.OpenChannel(nil, nil)
+	//u.wsc.OpenChannel(nil, nil)
 }
 
 func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	// TODO: Do we need to do anything here?
+	// TODO: Inform wallet service server about event.
 	log.Printf("Adjudicator event: type = %T", event)
 }
 

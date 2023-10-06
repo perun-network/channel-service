@@ -21,6 +21,7 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 	if err != nil {
 		return nil, err
 	}
+	// We assume that the wallet returns a PaddedSignature (see perun-ckb-backend/wallet/signature.go).
 	return smr.GetSignature(), nil
 }
 
