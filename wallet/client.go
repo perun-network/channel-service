@@ -2,12 +2,12 @@ package wallet
 
 import (
 	"context"
-	"perun.network/channel-service/rpc"
+	"perun.network/channel-service/rpc/proto"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
 type ExternalClient struct {
-	c rpc.WalletServiceClient
+	c proto.WalletServiceClient
 }
 
 func (e ExternalClient) Unlock(participant address.Participant) error {
@@ -15,8 +15,7 @@ func (e ExternalClient) Unlock(participant address.Participant) error {
 }
 
 func (e ExternalClient) SignData(participant address.Participant, data []byte) ([]byte, error) {
-	sm := &rpc.SignMessageRequest{Data: data}
-	// TODO: SignMessage needs some reference to the participant / key to sign with.
+	sm := &proto.SignMessageRequest{Pubkey: participant.PubKey.SerializeCompressed(), Data: data}
 	smr, err := e.c.SignMessage(context.TODO(), sm)
 	if err != nil {
 		return nil, err
@@ -25,6 +24,6 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 	return smr.GetSignature(), nil
 }
 
-func NewExternalClient(c rpc.WalletServiceClient) *ExternalClient {
+func NewExternalClient(c proto.WalletServiceClient) *ExternalClient {
 	return &ExternalClient{c: c}
 }

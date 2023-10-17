@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"perun.network/channel-service/rpc"
+	"perun.network/channel-service/rpc/proto"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/client"
 	"perun.network/go-perun/wallet"
@@ -22,11 +22,12 @@ var ErrChannelNotFound = errors.New("channel not found")
 type User struct {
 	usrMutex sync.Mutex
 
-	Channels    map[channel.ID]*client.Channel
-	Participant address.Participant
-	PerunClient *client.Client
-	WireAddress wire.Address
-	wsc         rpc.WalletServiceClient
+	Channels     map[channel.ID]*client.Channel
+	Participant  address.Participant
+	PerunClient  *client.Client
+	WireAddress  wire.Address
+	wsc          proto.WalletServiceClient
+	userRegister UserRegister
 }
 
 func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate, responder *client.UpdateResponder) {
@@ -36,9 +37,8 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 		return
 	}
 
-	resp, err := u.wsc.UpdateNotification(context.TODO(), &rpc.UpdateNotificationRequest{
-		State:     pbNewState,
-		ChannelId: pbNewState.Id,
+	resp, err := u.wsc.UpdateNotification(context.TODO(), &proto.UpdateNotificationRequest{
+		State: pbNewState,
 	})
 	if err != nil {
 		_ = responder.Reject(context.TODO(), "unable to send update notification to wallet")
@@ -53,11 +53,44 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 }
 
 func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) {
-	proposal.Base()
-	// FIXME: Make protobuf type for client.ChannelProposal and use it in OpenChannel. There might be an existing protobuf type for client.ChannelProposal.
-	panic("fixme")
-	// FIXME: OpenChannel needs OpenChannelResponse as return type!
-	//u.wsc.OpenChannel(nil, nil)
+	lcp, ok := proposal.(*client.LedgerChannelProposalMsg)
+	if !ok {
+		_ = responder.Reject(context.TODO(), "only ledger channel proposals are supported")
+	}
+	pLcp, err := protobuf.FromLedgerChannelProposalMsg(lcp)
+	if err != nil {
+		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to encode proposal: %v", err))
+	}
+	resp, err := u.wsc.OpenChannel(context.TODO(), &proto.OpenChannelRequest{Proposal: pLcp.LedgerChannelProposalMsg})
+	if err != nil {
+		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to open channel: %v", err))
+	}
+	ns := resp.GetNonceShare()
+	if ns == nil {
+		if resp.GetRejected() != nil {
+			_ = responder.Reject(context.TODO(), resp.GetRejected().GetReason())
+		} else {
+			_ = responder.Reject(context.TODO(), "wallet rejected channel proposal")
+		}
+	}
+	nonceShare := client.NonceShare{}
+	copy(nonceShare[:], ns)
+	cpa := client.LedgerChannelProposalAccMsg{
+		BaseChannelProposalAcc: client.BaseChannelProposalAcc{
+			ProposalID: lcp.ProposalID,
+			NonceShare: nonceShare,
+		},
+		Participant: &u.Participant,
+	}
+	ch, err := responder.Accept(context.TODO(), &cpa)
+	if err != nil {
+		panic(err)
+	}
+	err = u.userRegister.AssignChannelID(ch.ID(), u)
+	if err != nil {
+		panic(err)
+	}
+	u.Channels[ch.ID()] = ch
 }
 
 func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
@@ -66,7 +99,7 @@ func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	log.Printf("Adjudicator event: type = %T", event)
 }
 
-func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc rpc.WalletServiceClient) (*User, error) {
+func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient) (*User, error) {
 	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
 	if err != nil {
 		return nil, err
@@ -86,7 +119,7 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 		challengeDuration,
 		&u.Participant,
 		allocation,
-		[]wire.Address{u.WireAddress})
+		[]wire.Address{u.WireAddress, peer})
 	if err != nil {
 		return channel.ID{}, err
 	}
@@ -101,21 +134,35 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	return ch.ID(), nil
 }
 
-func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, alloc channel.Allocation) error {
+func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) error {
 	u.usrMutex.Lock()
 	defer u.usrMutex.Unlock()
 	ch, ok := u.Channels[id]
 	if !ok {
 		return ErrChannelNotFound
 	}
-	err := ch.Update(ctxt, UpdateToAllocation(alloc))
+	if err := VerifyStateTransition(ch.State().Clone(), newState.Clone()); err != nil {
+		return err
+	}
+	err := ch.Update(ctxt, UpdateToState(newState))
 	return err
+}
+
+func VerifyStateTransition(old, new *channel.State) error {
+	// TODO: implement
+	return nil
 }
 
 func UpdateToAllocation(alloc channel.Allocation) func(state *channel.State) {
 	return func(state *channel.State) {
 		// TODO: Properly update allocation with checks etc.
 		state.Allocation = alloc
+	}
+}
+
+func UpdateToState(ns *channel.State) func(state *channel.State) {
+	return func(state *channel.State) {
+		*state = *ns
 	}
 }
 
