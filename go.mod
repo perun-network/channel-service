@@ -6,7 +6,7 @@ require (
 	google.golang.org/grpc v1.58.2
 	google.golang.org/protobuf v1.31.0
 	perun.network/go-perun v0.10.6
-	perun.network/perun-ckb-backend v0.0.0-20231005112919-f9055c81dbd8
+	perun.network/perun-ckb-backend v0.0.0-20231023094541-d04bb9a4a12c
 )
 
 require (
