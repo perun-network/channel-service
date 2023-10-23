@@ -14,6 +14,13 @@ type RemoteSigner struct {
 	addr address.Address
 }
 
+func NewRemoteSigner(wcs proto.WalletServiceClient, addr address.Address) *RemoteSigner {
+	return &RemoteSigner{
+		wcs:  wcs,
+		addr: addr,
+	}
+}
+
 func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*transaction.TransactionWithScriptGroups, error) {
 	scriptBytes, err := json.Marshal(s.addr.Script)
 	if err != nil {
