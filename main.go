@@ -8,6 +8,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"net"
 	"os"
@@ -62,8 +63,7 @@ func main() {
 	}
 
 	// Set up WalletService Client
-	var dialOpts []grpc.DialOption
-	conn, err := grpc.Dial(*wssURL, dialOpts...)
+	conn, err := grpc.Dial(*wssURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect to wallet service server: %v", err)
 	}
