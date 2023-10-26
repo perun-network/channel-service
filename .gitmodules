@@ -1,0 +1,3 @@
+[submodule "perun-wallet-spec"]
+	path = perun-wallet-spec
+	url = git@github.com:perun-network/perun-wallet-spec
