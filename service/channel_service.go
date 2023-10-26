@@ -146,11 +146,7 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	if !errors.Is(err, ErrUserNotFound) { // TODO: Maybe we should create a new user in this case.
 		return nil, err
 	}
-	usr, err = c.InitializeUser(addr)
-	if err != nil {
-		return nil, err
-	}
-	return c.UserRegister.AddUser(addr, usr), nil
+	return c.InitializeUser(addr)
 }
 
 func (c ChannelService) InitializeUser(participant address.Participant) (*User, error) {
@@ -169,7 +165,12 @@ func (c ChannelService) InitializeUser(participant address.Participant) (*User, 
 	if err != nil {
 		return nil, err
 	}
-	return NewUser(participant, wAddr, c.bus, f, adj, c.wallet, watcher, c.wsc)
+	usr, err := NewUser(participant, wAddr, c.bus, f, adj, c.wallet, watcher, c.wsc)
+	if err != nil {
+		return nil, err
+	}
+	c.UserRegister.AddUser(participant, usr)
+	return usr, nil
 }
 
 func (c ChannelService) GetAllocationFromChannelOpenRequest(request *proto.ChannelOpenRequest) (*channel.Allocation, error) {
