@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
+	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 )
 
@@ -21,15 +24,16 @@ func NewRemoteSigner(wcs proto.WalletServiceClient, addr address.Address) *Remot
 	}
 }
 
-func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*transaction.TransactionWithScriptGroups, error) {
+func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*types.Transaction, error) {
 	scriptBytes, err := json.Marshal(s.addr.Script)
 	if err != nil {
 		return nil, err
 	}
-	txBytes, err := json.Marshal(tx)
+	txBytes, err := json.Marshal(tx.TxView)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Signing transaction: %x\n", txBytes)
 	req := &proto.SignTransactionRequest{
 		Identifier:  scriptBytes, // TODO: Maybe encode network also?
 		Transaction: txBytes,
@@ -42,8 +46,9 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 		return nil, fmt.Errorf("transaction signing failed: %s", rej.Reason)
 	}
 
-	var signedTx transaction.TransactionWithScriptGroups
+	var signedTx types.Transaction
 	signedTxBytes := resp.GetTransaction()
+	fmt.Printf("Signed transaction: %s\n", string(signedTxBytes))
 	if err = json.Unmarshal(signedTxBytes, &signedTx); err != nil {
 		return nil, err
 	}

@@ -48,3 +48,4 @@ require (
 )
 
 replace github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0 => github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20230601140721-2bf596fddd80
+replace perun.network/go-perun v0.10.6 => ../go-perun

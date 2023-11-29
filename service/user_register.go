@@ -2,9 +2,11 @@ package service
 
 import (
 	"errors"
+	"log"
+	"sync"
+
 	"perun.network/go-perun/channel"
 	"perun.network/perun-ckb-backend/wallet/address"
-	"sync"
 )
 
 var ErrUserNotFound = errors.New("user not found")
@@ -24,13 +26,15 @@ type UserRegister interface {
 type MutexUserRegister struct {
 	mtx      sync.Mutex
 	register map[channel.ID]*User
-	users    map[address.Participant]*User
+	// FIXME: Use a clone or key method on address.Participant instead of only
+	// pubkey.
+	users map[[33]byte]*User
 }
 
 func (m *MutexUserRegister) GetUserFromParticipant(participant address.Participant) (*User, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	u, ok := m.users[participant]
+	u, ok := m.users[participant.GetCompressedSEC1()]
 	if !ok {
 		return nil, ErrUserNotFound
 	}
@@ -40,11 +44,12 @@ func (m *MutexUserRegister) GetUserFromParticipant(participant address.Participa
 func (m *MutexUserRegister) AddUser(participant address.Participant, user *User) *User {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	u, ok := m.users[participant]
+	u, ok := m.users[participant.GetCompressedSEC1()]
 	if ok {
 		return u
 	}
-	m.users[participant] = user
+	log.Printf("Adding user %v to register", participant)
+	m.users[participant.GetCompressedSEC1()] = user
 	return user
 }
 
@@ -72,5 +77,6 @@ func (m *MutexUserRegister) AssignChannelID(cid channel.ID, user *User) error {
 func NewMutexUserRegister() *MutexUserRegister {
 	return &MutexUserRegister{
 		register: make(map[channel.ID]*User),
+		users:    make(map[[33]byte]*User),
 	}
 }

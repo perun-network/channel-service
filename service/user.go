@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
+
+	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/client"
@@ -13,7 +16,6 @@ import (
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
 	"perun.network/perun-ckb-backend/wallet/address"
-	"sync"
 )
 
 var ErrChannelNotFound = errors.New("channel not found")
@@ -53,24 +55,36 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 }
 
 func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) {
+	addr, err := u.Participant.ToCKBAddress(types.NetworkTest).Encode()
+	if err != nil {
+		panic(fmt.Sprintf("encoding participant addr: %v", err))
+	}
+	log.Printf("Handling channel proposal as user: %s", addr)
 	lcp, ok := proposal.(*client.LedgerChannelProposalMsg)
 	if !ok {
 		_ = responder.Reject(context.TODO(), "only ledger channel proposals are supported")
+		return
 	}
 	pLcp, err := protobuf.FromLedgerChannelProposalMsg(lcp)
 	if err != nil {
 		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to encode proposal: %v", err))
+		return
 	}
+	log.Println("Requesting nonce share from wallet")
 	resp, err := u.wsc.OpenChannel(context.TODO(), &proto.OpenChannelRequest{Proposal: pLcp.LedgerChannelProposalMsg})
 	if err != nil {
 		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to open channel: %v", err))
+		return
 	}
+	log.Println("Received nonce share from wallet")
 	ns := resp.GetNonceShare()
 	if ns == nil {
 		if resp.GetRejected() != nil {
 			_ = responder.Reject(context.TODO(), resp.GetRejected().GetReason())
+			return
 		} else {
 			_ = responder.Reject(context.TODO(), "wallet rejected channel proposal")
+			return
 		}
 	}
 	nonceShare := client.NonceShare{}
@@ -121,11 +135,12 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 		allocation,
 		[]wire.Address{u.WireAddress, peer})
 	if err != nil {
-		return channel.ID{}, err
+		return channel.ID{}, fmt.Errorf("creating LedgerChannelProposal: %w", err)
 	}
+	log.Println("Proposing channel on PerunClient")
 	ch, err := u.PerunClient.ProposeChannel(ctxt, proposal)
 	if err != nil {
-		return channel.ID{}, err
+		return channel.ID{}, fmt.Errorf("proposing channel: %w", err)
 	}
 	u.startWatching(ch)
 	u.usrMutex.Lock()
