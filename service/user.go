@@ -113,16 +113,18 @@ func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	log.Printf("Adjudicator event: type = %T", event)
 }
 
-func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient) (*User, error) {
+func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, reg UserRegister) (*User, error) {
 	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
 	if err != nil {
 		return nil, err
 	}
 	u := &User{
-		Participant: participant,
-		PerunClient: c,
-		WireAddress: wAddr,
-		wsc:         wsc,
+		Participant:  participant,
+		PerunClient:  c,
+		WireAddress:  wAddr,
+		wsc:          wsc,
+		userRegister: reg,
+		Channels:     make(map[channel.ID]*client.Channel),
 	}
 	go c.Handle(u, u)
 	return u, nil
@@ -218,4 +220,13 @@ func (u *User) startWatching(ch *client.Channel) {
 			fmt.Printf("Watcher returned with error: %v", err)
 		}
 	}()
+}
+
+func (u *User) GetChannels() []channel.State {
+	// TODO: Consider concurrency issues.
+	var states []channel.State
+	for _, ch := range u.Channels {
+		states = append(states, *ch.State().Clone())
+	}
+	return states
 }

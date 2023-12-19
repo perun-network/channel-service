@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
+	"log"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
@@ -112,6 +111,36 @@ func (c ChannelService) CloseChannel(ctx context.Context, request *proto.Channel
 	return &proto.ChannelCloseResponse{Msg: &proto.ChannelCloseResponse_Close{Close: &proto.SuccessfulClose{ChannelId: cid[:]}}}, nil
 }
 
+func (c ChannelService) GetChannels(ctx context.Context, request *proto.GetChannelsRequest) (*proto.GetChannelsResponse, error) {
+	u, err := c.getUserFromGetChannelsRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	states := u.GetChannels()
+	if len(states) == 0 {
+		return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_State{State: nil}}, nil
+	}
+	state := states[0]
+	pState, err := protobuf.FromState(&state)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_State{State: pState}}, nil
+}
+
+func (c ChannelService) getUserFromGetChannelsRequest(request *proto.GetChannelsRequest) (*User, error) {
+	r := request.GetRequester()
+	if r == nil {
+		return nil, fmt.Errorf("missing requester in GetChannelsRequest")
+	}
+	var addr address.Participant
+	err := addr.UnmarshalBinary(r)
+	if err != nil {
+		return nil, err
+	}
+	return c.UserRegister.GetUserFromParticipant(addr)
+}
+
 func AsChannelID(in []byte) (channel.ID, error) {
 	id := channel.ID{}
 	n := copy(id[:], in)
@@ -176,7 +205,7 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	if err != nil {
 		return nil, err
 	}
-	usr, err := NewUser(participant, wAddr, c.bus, f, adj, w, watcher, wsc)
+	usr, err := NewUser(participant, wAddr, c.bus, f, adj, w, watcher, wsc, c.UserRegister)
 	if err != nil {
 		return nil, err
 	}
