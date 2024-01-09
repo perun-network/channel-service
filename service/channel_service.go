@@ -7,6 +7,9 @@ import (
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
+	p "google.golang.org/grpc/peer"
+	"log"
+	"net"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
@@ -17,6 +20,7 @@ import (
 	"perun.network/go-perun/wire/protobuf"
 	"perun.network/perun-ckb-backend/backend"
 	"perun.network/perun-ckb-backend/channel/adjudicator"
+	"perun.network/perun-ckb-backend/channel/asset"
 	"perun.network/perun-ckb-backend/channel/funder"
 	"perun.network/perun-ckb-backend/client"
 	"perun.network/perun-ckb-backend/wallet/address"
@@ -24,13 +28,14 @@ import (
 )
 
 type ChannelService struct {
-	UserRegister UserRegister
-	wsc          proto.WalletServiceClient
-	bus          wire.Bus
-	network      types.Network
-	node         rpc.Client
-	deployment   backend.Deployment
-	wallet       gpwallet.Wallet
+	NetworkRegister NetworkRegister
+	UserRegister    UserRegister
+	wsc             proto.WalletServiceClient
+	bus             wire.Bus
+	network         types.Network
+	node            rpc.Client
+	deployment      backend.Deployment
+	wallet          gpwallet.Wallet
 
 	proto.UnimplementedChannelServiceServer // always embed
 }
@@ -42,19 +47,24 @@ func NewChannelService(c proto.WalletServiceClient, bus wire.Bus, network types.
 	}
 
 	return &ChannelService{
-		UserRegister: NewMutexUserRegister(),
-		wsc:          c,
-		bus:          bus,
-		network:      network,
-		node:         node,
-		deployment:   deployment,
-		wallet:       external.NewWallet(wallet.NewExternalClient(c)),
+		NetworkRegister: NewMutexNetworkRegister(),
+		UserRegister:    NewMutexUserRegister(),
+		wsc:             c,
+		bus:             bus,
+		network:         network,
+		node:            node,
+		deployment:      deployment,
+		wallet:          external.NewWallet(wallet.NewExternalClient(c)),
 	}, nil
 }
 
 func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelOpenRequest) (*proto.ChannelOpenResponse, error) {
-
+	log.Println("Received channel open request")
 	user, err := c.GetUserFromChannelOpenRequest(request)
+	me, ok := p.FromContext(ctx)
+	if ok {
+		c.NetworkRegister.AddUser(me.Addr, user)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -62,18 +72,25 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Allocation received: %v", allocation.Balances)
 	peer := c.GetPeerAddressFromChannelOpenRequest(request)
 	challengeDuration := c.GetChallengeDurationFromChannelOpenRequest(request)
+	log.Printf("Opening channel with peer %s", request.GetPeer())
 	id, err := user.OpenChannel(ctx, peer, allocation, challengeDuration)
+	log.Println("Opening request returned")
 	if err != nil {
 		return &proto.ChannelOpenResponse{Msg: &proto.ChannelOpenResponse_Rejected{Rejected: &proto.Rejected{Reason: err.Error()}}}, err
 	}
 	return &proto.ChannelOpenResponse{Msg: &proto.ChannelOpenResponse_ChannelId{ChannelId: id[:]}}, nil
-
 }
 
 func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.ChannelUpdateRequest) (*proto.ChannelUpdateResponse, error) {
-	cid, user, err := c.GetChannelInfoFromRequest(request.State.GetId())
+	log.Println("Received channel update request")
+	me, ok := p.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("unable to get network address")
+	}
+	cid, user, err := c.GetChannelInfoFromRequest(request.State.GetId(), me.Addr)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +112,11 @@ func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.Channe
 }
 
 func (c ChannelService) CloseChannel(ctx context.Context, request *proto.ChannelCloseRequest) (*proto.ChannelCloseResponse, error) {
-	cid, user, err := c.GetChannelInfoFromRequest(request.GetChannelId())
+	me, ok := p.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("unable to get network address")
+	}
+	cid, user, err := c.GetChannelInfoFromRequest(request.GetChannelId(), me.Addr)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +126,46 @@ func (c ChannelService) CloseChannel(ctx context.Context, request *proto.Channel
 		return &proto.ChannelCloseResponse{Msg: &proto.ChannelCloseResponse_Rejected{Rejected: &proto.Rejected{Reason: err.Error()}}}, err
 	}
 	return &proto.ChannelCloseResponse{Msg: &proto.ChannelCloseResponse_Close{Close: &proto.SuccessfulClose{ChannelId: cid[:]}}}, nil
+}
+
+func (c ChannelService) GetChannels(ctx context.Context, request *proto.GetChannelsRequest) (*proto.GetChannelsResponse, error) {
+	u, err := c.getUserFromGetChannelsRequest(request)
+	me, ok := p.FromContext(ctx)
+	if ok {
+		c.NetworkRegister.AddUser(me.Addr, u)
+	}
+	//log.Println("GetChannels request received")
+	if err != nil {
+		//	log.Println("unable to find user for get channels request")
+		return nil, err
+	}
+	//log.Printf("User found for get channels request: %v\n", u)
+	states := u.GetChannels()
+	if len(states) == 0 {
+		//	log.Println("No channels found for user")
+		return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_Rejected{Rejected: &proto.Rejected{Reason: "no channels exists for user"}}}, nil
+	}
+	state := states[0]
+	pState, err := protobuf.FromState(&state)
+	if err != nil {
+		//	log.Println("unable to convert state to protobuf")
+		return nil, err
+	}
+	//log.Printf("Returning state: %v\n", pState)
+	return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_State{State: pState}}, nil
+}
+
+func (c ChannelService) getUserFromGetChannelsRequest(request *proto.GetChannelsRequest) (*User, error) {
+	r := request.GetRequester()
+	if r == nil {
+		return nil, fmt.Errorf("missing requester in GetChannelsRequest")
+	}
+	var addr address.Participant
+	err := addr.UnmarshalBinary(r)
+	if err != nil {
+		return nil, err
+	}
+	return c.UserRegister.GetUserFromParticipant(addr)
 }
 
 func AsChannelID(in []byte) (channel.ID, error) {
@@ -117,15 +178,19 @@ func AsChannelID(in []byte) (channel.ID, error) {
 }
 
 func AsChannelState(ps *protobuf.State) (*channel.State, error) {
+	log.Println("Converting protobuf state to channel state")
 	return protobuf.ToState(ps)
 }
 
-func (c ChannelService) GetChannelInfoFromRequest(reqChannelId []byte) (channel.ID, *User, error) {
+func (c ChannelService) GetChannelInfoFromRequest(reqChannelId []byte, requester net.Addr) (channel.ID, *User, error) {
 	cid, err := AsChannelID(reqChannelId)
 	if err != nil {
 		return channel.ID{}, nil, err
 	}
-	usr, err := c.UserRegister.GetUser(cid)
+	//FIXME: This is a hack to get the user from the network to enable a single channel service to work with two neuron
+	// wallets.
+	usr, err := c.NetworkRegister.GetUser(requester)
+	// usr, err := c.UserRegister.GetUser(cid)
 	return cid, usr, err
 }
 
@@ -139,6 +204,9 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	if err != nil {
 		return nil, err
 	}
+
+	log.Printf("Participant to fetch: %s", addr)
+
 	usr, err := c.UserRegister.GetUserFromParticipant(addr)
 	if err == nil {
 		return usr, nil
@@ -146,15 +214,18 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	if !errors.Is(err, ErrUserNotFound) { // TODO: Maybe we should create a new user in this case.
 		return nil, err
 	}
-	return c.InitializeUser(addr)
+	log.Printf("User not found, initializing user %s", addr)
+	return c.InitializeUser(addr, c.wsc, c.wallet)
 }
 
-func (c ChannelService) InitializeUser(participant address.Participant) (*User, error) {
+func (c *ChannelService) InitializeUser(participant address.Participant, wsc proto.WalletServiceClient, w gpwallet.Wallet) (*User, error) {
+	log.Printf("Initializing user %s", participant)
+
 	wAddr, err := c.MakeDefaultWireAddress(participant)
 	if err != nil {
 		return nil, err
 	}
-	rs := wallet.NewRemoteSigner(c.wsc, c.ToCKBAddress(participant))
+	rs := wallet.NewRemoteSigner(wsc, c.ToCKBAddress(participant))
 	ckbClient, err := client.NewClient(c.node, rs, c.deployment)
 	if err != nil {
 		return nil, err
@@ -165,7 +236,7 @@ func (c ChannelService) InitializeUser(participant address.Participant) (*User, 
 	if err != nil {
 		return nil, err
 	}
-	usr, err := NewUser(participant, wAddr, c.bus, f, adj, c.wallet, watcher, c.wsc)
+	usr, err := NewUser(participant, wAddr, c.bus, f, adj, w, watcher, wsc, c.UserRegister)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +248,35 @@ func (c ChannelService) GetAllocationFromChannelOpenRequest(request *proto.Chann
 	if request.GetAllocation() == nil {
 		return nil, fmt.Errorf("missing allocation in ChannelOpenRequest")
 	}
-	return protobuf.ToAllocation(request.GetAllocation())
+	return toCKBAllocation(request.GetAllocation())
+}
+
+func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, error) {
+	alloc := &channel.Allocation{}
+	alloc.Assets = make([]channel.Asset, len(protoAlloc.Assets))
+	for i := range protoAlloc.Assets {
+		// NOTE: We will assume the first asset will always be CKBytes.
+		if i == 0 {
+			alloc.Assets[i] = asset.CKBAsset
+		} else {
+			alloc.Assets[i] = channel.NewAsset()
+		}
+		err := alloc.Assets[i].UnmarshalBinary(protoAlloc.Assets[i])
+		if err != nil {
+			return nil, fmt.Errorf("%d'th asset: %w", i, err)
+		}
+	}
+	alloc.Locked = make([]channel.SubAlloc, len(protoAlloc.Locked))
+	for i := range protoAlloc.Locked {
+		locked, err := protobuf.ToSubAlloc(protoAlloc.Locked[i])
+		if err != nil {
+			return nil, fmt.Errorf("%d'th sub alloc: %w", i, err)
+		}
+		alloc.Locked[i] = locked
+	}
+	alloc.Balances = protobuf.ToBalances(protoAlloc.Balances)
+
+	return alloc, nil
 }
 
 func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) wire.Address {

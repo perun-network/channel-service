@@ -8,8 +8,8 @@ require (
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
-	perun.network/go-perun v0.10.7-0.20230808153546-74844191e56e
-	perun.network/perun-ckb-backend v0.0.0-20231026110519-7a17b08740d8
+	perun.network/go-perun v0.10.7-0.20231129141902-1c28c0db336c
+	perun.network/perun-ckb-backend v0.0.0-20240109122332-f86091bf9d03
 )
 
 require (
