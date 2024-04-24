@@ -10,6 +10,7 @@ import (
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/go-perun/channel"
+	"perun.network/go-perun/channel/persistence"
 	"perun.network/go-perun/client"
 	"perun.network/go-perun/wallet"
 	"perun.network/go-perun/watcher"
@@ -54,7 +55,7 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 
 }
 
-func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) {
+func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) { // ASSUMPTION: the responder parameter contains the same perun client which this user has
 	addr, err := u.Participant.ToCKBAddress(types.NetworkTest).Encode()
 	if err != nil {
 		panic(fmt.Sprintf("encoding participant addr: %v", err))
@@ -113,8 +114,9 @@ func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	log.Printf("Adjudicator event: type = %T", event)
 }
 
-func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, reg UserRegister) (*User, error) {
+func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, reg UserRegister, pr persistence.PersistRestorer) (*User, error) {
 	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	c.EnablePersistence(pr) //automatically saves channels to persistence
 	if err != nil {
 		return nil, err
 	}
