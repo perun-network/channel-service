@@ -40,7 +40,6 @@ func main() {
 	host := flag.String("host", "", "Where to host Channel Service Server, e.g. localhost:4321")
 	aliceWssURL := flag.String("alice-wss-url", "", "URL of the WalletServiceServer e.g. localhost:1234")
 	bobWssURL := flag.String("bob-wss-url", "", "URL of the WalletServiceServer e.g. localhost:1234")
-
 	flag.Parse()
 
 	// Check if the node URL is provided
@@ -87,7 +86,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error getting deployment: %v", err)
 	}
-	bus := wire.NewLocalBus()
+	bus := wire.NewLocalBus() //TODO: Change it to a Relay Server bus
 	cs, err := service.NewChannelService(nil, bus, types.NetworkTest, *nodeURL, d)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)

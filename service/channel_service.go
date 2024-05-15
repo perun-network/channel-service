@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net"
+
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	p "google.golang.org/grpc/peer"
-	"log"
-	"net"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
+	"perun.network/go-perun/channel/persistence"
 	gpwallet "perun.network/go-perun/wallet"
 	"perun.network/go-perun/watcher/local"
 	"perun.network/go-perun/wire"
@@ -218,6 +220,7 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	return c.InitializeUser(addr, c.wsc, c.wallet)
 }
 
+// Maybe this function is not needed -> move to demo?
 func (c *ChannelService) InitializeUser(participant address.Participant, wsc proto.WalletServiceClient, w gpwallet.Wallet) (*User, error) {
 	log.Printf("Initializing user %s", participant)
 
@@ -236,7 +239,8 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	if err != nil {
 		return nil, err
 	}
-	usr, err := NewUser(participant, wAddr, c.bus, f, adj, w, watcher, wsc, c.UserRegister)
+	pr := persistence.NonPersistRestorer
+	usr, err := NewUser(participant, wAddr, c.bus, f, adj, w, watcher, wsc, c.UserRegister, pr)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +261,10 @@ func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, erro
 	for i := range protoAlloc.Assets {
 		// NOTE: We will assume the first asset will always be CKBytes.
 		if i == 0 {
-			alloc.Assets[i] = asset.CKBAsset
+			alloc.Assets[i] = &asset.Asset{
+				IsCKBytes: true,
+				SUDT:      nil,
+			}
 		} else {
 			alloc.Assets[i] = channel.NewAsset()
 		}
