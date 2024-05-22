@@ -69,7 +69,7 @@ func main() {
 	aliceWireAcc := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
 	aliceNet, err := p2p.NewP2PBus(aliceWireAcc)
 	if err != nil {
-		log.Fatalf("creating p2p net", err)
+		log.Fatalf("creating p2p net: %v", err)
 	}
 	aliceBus := aliceNet.Bus
 	aliceListener := aliceNet.Listener
@@ -99,7 +99,7 @@ func main() {
 	bobWireAcc := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
 	bobNet, err := p2p.NewP2PBus(bobWireAcc)
 	if err != nil {
-		log.Fatalf("creating p2p net", err)
+		log.Fatalf("creating p2p net: %v", err)
 	}
 	bobBus := bobNet.Bus
 	bobListener := bobNet.Listener
