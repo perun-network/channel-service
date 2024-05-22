@@ -25,12 +25,11 @@ var ErrChannelNotFound = errors.New("channel not found")
 type User struct {
 	usrMutex sync.Mutex
 
-	Channels     map[channel.ID]*client.Channel
-	Participant  address.Participant
-	PerunClient  *client.Client
-	WireAddress  wire.Address
-	wsc          proto.WalletServiceClient
-	userRegister UserRegister
+	Channels    map[channel.ID]*client.Channel
+	Participant address.Participant
+	PerunClient *client.Client
+	WireAddress wire.Address
+	wsc         proto.WalletServiceClient
 }
 
 func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate, responder *client.UpdateResponder) {
@@ -101,10 +100,6 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 	if err != nil {
 		panic(err)
 	}
-	err = u.userRegister.AssignChannelID(ch.ID(), u)
-	if err != nil {
-		panic(err)
-	}
 	u.Channels[ch.ID()] = ch
 }
 
@@ -114,19 +109,18 @@ func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	log.Printf("Adjudicator event: type = %T", event)
 }
 
-func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, reg UserRegister, pr persistence.PersistRestorer) (*User, error) {
+func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) (*User, error) {
 	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
 	c.EnablePersistence(pr) //automatically saves channels to persistence
 	if err != nil {
 		return nil, err
 	}
 	u := &User{
-		Participant:  participant,
-		PerunClient:  c,
-		WireAddress:  wAddr,
-		wsc:          wsc,
-		userRegister: reg,
-		Channels:     make(map[channel.ID]*client.Channel),
+		Participant: participant,
+		PerunClient: c,
+		WireAddress: wAddr,
+		wsc:         wsc,
+		Channels:    make(map[channel.ID]*client.Channel),
 	}
 	go c.Handle(u, u)
 	return u, nil
