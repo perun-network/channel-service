@@ -13,3 +13,4 @@
 
 # log files
 *.log
+./.vscode
