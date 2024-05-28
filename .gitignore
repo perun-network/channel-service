@@ -14,3 +14,4 @@
 # log files
 *.log
 ./.vscode
+/.idea

@@ -29,7 +29,7 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 	if err != nil {
 		return nil, err
 	}
-	txBytes, err := json.Marshal(tx.TxView)
+	txBytes, err := json.Marshal(tx)
 	if err != nil {
 		return nil, err
 	}
