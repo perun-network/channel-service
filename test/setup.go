@@ -55,6 +55,7 @@ type Setup struct {
 	Asset               asset.Asset
 	AccKeys             []*secp256k1.PrivateKey
 	WireAccs            []*p2p.Account
+	Participants        []ckbaddr.Participant
 
 	WalletServiceClients       []proto.WalletServiceClient
 	WscCleanupFuncs            []func()
@@ -82,6 +83,7 @@ func NewTestSetup(t *testing.T) *Setup {
 
 	pubKeys := []*secp256k1.PublicKey{alicePrivateKey.PubKey(), bobPrivateKey.PubKey()}
 	parts, err := MakeParticipants(pubKeys)
+	setup.Participants = parts
 	require.NoError(t, err, "error making participants")
 
 	aliceAccount := ckbwallet.NewAccountFromPrivateKey(alicePrivateKey)

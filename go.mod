@@ -11,7 +11,7 @@ require (
 	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
-	perun.network/go-perun v0.10.7-0.20231129141902-1c28c0db336c
+	perun.network/go-perun v0.10.7-0.20240220134748-0b444cb3a6e7
 	perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
 )
