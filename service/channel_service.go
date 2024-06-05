@@ -13,7 +13,9 @@ import (
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/channel/persistence"
+	gclient "perun.network/go-perun/client"
 	gpwallet "perun.network/go-perun/wallet"
+	"perun.network/go-perun/watcher"
 	"perun.network/go-perun/watcher/local"
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
@@ -321,4 +323,17 @@ func (c ChannelService) AddWireAddress(participant address.Participant) (wire.Ad
 
 func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address {
 	return addr.ToCKBAddress(c.network)
+}
+
+func (c *ChannelService) ClosePerunClient() {
+	c.user.PerunClient.Close()
+}
+
+func (c *ChannelService) NewperunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet gpwallet.Wallet, watcher watcher.Watcher) {
+	client, err := gclient.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	if err != nil {
+		log.Println("Error creating new PerunClient")
+	}
+	c.user.PerunClient = client
+
 }

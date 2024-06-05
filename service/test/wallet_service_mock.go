@@ -2,36 +2,183 @@ package test
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
+	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
+	"perun.network/channel-service/rpc/proto"
+	"perun.network/go-perun/client"
+	"perun.network/perun-ckb-backend/backend"
+	"perun.network/perun-ckb-backend/wallet"
+	"perun.network/perun-ckb-backend/wallet/address"
 )
 
-type MockWalletServiceClient struct {
-	mock.Mock
+// test implementation for wallet API
+type MyWalletService struct {
+	account                        *wallet.Account
+	privateKey                     *secp256k1.PrivateKey
+	network                        types.Network
+	openChannelResponseFlag        bool
+	updateNotificationResponseFlag bool
+	signMessageResponseFlag        bool
+	signTransactionResponseFlag    bool
+	proto.UnimplementedWalletServiceServer
 }
 
-func (m *MockWalletServiceClient) OpenChannel(ctx context.Context, in *OpenChannelRequest, opts ...grpc.CallOption) (*OpenChannelResponse, error) {
-	args := m.Called(ctx, in, opts)
-	return args.Get(0).(*OpenChannelResponse), args.Error(1)
+func NewWalletServiceServer(acc *wallet.Account, privKey *secp256k1.PrivateKey, network types.Network) *MyWalletService {
+	return &MyWalletService{
+		account:    acc,
+		privateKey: privKey,
+		network:    network,
+	}
 }
 
-func (m *MockWalletServiceClient) UpdateNotification(ctx context.Context, in *UpdateNotificationRequest, opts ...grpc.CallOption) (*UpdateNotificationResponse, error) {
-	args := m.Called(ctx, in, opts)
-	return args.Get(0).(*UpdateNotificationResponse), args.Error(1)
+func (wsc *MyWalletService) OpenChannel(ctx context.Context, in *proto.OpenChannelRequest) (*proto.OpenChannelResponse, error) {
+	if wsc.openChannelResponseFlag {
+		return openChannelAccepted()
+	} else {
+		return openChannelRejected()
+	}
 }
 
-func (m *MockWalletServiceClient) SignMessage(ctx context.Context, in *SignMessageRequest, opts ...grpc.CallOption) (*SignMessageResponse, error) {
-	args := m.Called(ctx, in, opts)
-	return args.Get(0).(*SignMessageResponse), args.Error(1)
+// sets default for wallet's response for incoming channel reqeuests. True sets to accept all proposals. False sets it to reject
+func (wsc *MyWalletService) SetOpenChannelResponse(flag bool) {
+	wsc.openChannelResponseFlag = flag
 }
 
-func (m *MockWalletServiceClient) SignTransaction(ctx context.Context, in *SignTransactionRequest, opts ...grpc.CallOption) (*SignTransactionResponse, error) {
-	args := m.Called(ctx, in, opts)
-	return args.Get(0).(*SignTransactionResponse), args.Error(1)
+func openChannelAccepted() (*proto.OpenChannelResponse, error) {
+	nonceShare := client.WithRandomNonce()["nonce"]
+	return &proto.OpenChannelResponse{
+		Msg: &proto.OpenChannelResponse_NonceShare{
+			NonceShare: nonceShare.([]byte),
+		}}, nil
 }
 
-func (m *MockWalletServiceClient) GetAssets(ctx context.Context, in *GetAssetsRequest, opts ...grpc.CallOption) (*GetAssetsResponse, error) {
-	args := m.Called(ctx, in, opts)
-	return args.Get(0).(*GetAssetsResponse), args.Error(1)
+func openChannelRejected() (*proto.OpenChannelResponse, error) {
+	return &proto.OpenChannelResponse{
+		Msg: &proto.OpenChannelResponse_Rejected{
+			Rejected: &proto.Rejected{
+				Reason: "not accepting channels",
+			},
+		},
+	}, nil
 }
+
+func (wsc *MyWalletService) UpdateNotification(ctx context.Context, in *proto.UpdateNotificationRequest) (*proto.UpdateNotificationResponse, error) {
+	if wsc.updateNotificationResponseFlag {
+		return updateNotificationAccepted()
+	} else {
+		return updateNotificationRejected()
+
+	}
+}
+
+// set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates
+func (wsc *MyWalletService) SetUpdateNotificationResponse(flag bool) {
+	wsc.updateNotificationResponseFlag = flag
+}
+
+func updateNotificationAccepted() (*proto.UpdateNotificationResponse, error) {
+	return &proto.UpdateNotificationResponse{
+		Accepted: true,
+	}, nil
+}
+
+func updateNotificationRejected() (*proto.UpdateNotificationResponse, error) {
+	return &proto.UpdateNotificationResponse{
+		Accepted: false,
+	}, nil
+}
+
+func (wsc *MyWalletService) SignMessage(ctx context.Context, in *proto.SignMessageRequest) (*proto.SignMessageResponse, error) {
+	if wsc.signMessageResponseFlag {
+		return wsc.signMessageAccepted(in.Data)
+	} else {
+		return wsc.signMessageRejected()
+	}
+}
+
+// set default response for SignMessage. True sets wallet to sign all messages, false rejects all requests to sign message
+func (wsc *MyWalletService) SetSignMessageResponse(flag bool) {
+	wsc.signMessageResponseFlag = flag
+}
+
+func (wsc *MyWalletService) signMessageAccepted(data []byte) (*proto.SignMessageResponse, error) {
+	//How to sign message
+	signedMsg, err := wsc.account.SignData(data)
+	if err != nil {
+		log.Println("Error signing message", err)
+	}
+	return &proto.SignMessageResponse{
+		Msg: &proto.SignMessageResponse_Signature{
+			Signature: signedMsg,
+		},
+	}, nil
+}
+
+func (wsc *MyWalletService) signMessageRejected() (*proto.SignMessageResponse, error) {
+	return &proto.SignMessageResponse{
+		Msg: &proto.SignMessageResponse_Rejected{
+			Rejected: &proto.Rejected{
+				Reason: "Not accepting messages",
+			},
+		}}, nil
+}
+
+func (wsc *MyWalletService) SignTransaction(ctx context.Context, tx *proto.SignTransactionRequest) (*proto.SignTransactionResponse, error) {
+	if wsc.signTransactionResponseFlag {
+		return wsc.signedTransactionAccepted(tx)
+	} else {
+		return wsc.signedTransationRejected()
+	}
+}
+
+// set default response for SignTransaction. True sets wallet to sign all tx requests, and false to reject all tx requests
+func (wsc *MyWalletService) SetSignTransactionResponse(flag bool) {
+	wsc.signMessageResponseFlag = flag
+}
+
+func (wsc *MyWalletService) signedTransactionAccepted(tx *proto.SignTransactionRequest) (*proto.SignTransactionResponse, error) {
+	ckbAddr := address.AsParticipant(wsc.account.Address()).ToCKBAddress(wsc.network)
+	txSigner := backend.NewSignerInstance(ckbAddr, *wsc.privateKey, types.NetworkTest)
+	txWithScriptGroups := &transaction.TransactionWithScriptGroups{}
+	err := json.Unmarshal(tx.Transaction, txWithScriptGroups)
+	if err != nil {
+		log.Println("Error unmarshalling transaction", err)
+	}
+	signedTx, err := txSigner.SignTransaction(txWithScriptGroups)
+	if err != nil {
+		log.Println("Error signing transaction", err)
+	}
+	signedTxBytes, err := json.Marshal(signedTx)
+	if err != nil {
+		log.Println("Error marshalling signed transaction", err)
+	}
+	return &proto.SignTransactionResponse{
+		Msg: &proto.SignTransactionResponse_Transaction{
+			Transaction: signedTxBytes,
+		},
+	}, nil
+}
+
+func (wsc *MyWalletService) signedTransationRejected() (*proto.SignTransactionResponse, error) {
+	return &proto.SignTransactionResponse{
+		Msg: &proto.SignTransactionResponse_Rejected{
+			Rejected: &proto.Rejected{
+				Reason: "Not accepting transactions",
+			},
+		},
+	}, nil
+
+}
+
+// sets default response for GetAssets().
+func (wsc *MyWalletService) SetGetAssetsResponse(flag bool) {}
+
+func (wsc *MyWalletService) GetAssets(ctx context.Context, in *proto.GetAssetsRequest) (*proto.GetAssetsResponse, error) {
+	return nil, nil
+}
+
+func (wsc *MyWalletService) mustEmbedUnimplementedWalletServiceServer() {}
