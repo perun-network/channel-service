@@ -1,3 +1,6 @@
 [submodule "perun-wallet-spec"]
 	path = perun-wallet-spec
 	url = git@github.com:perun-network/perun-wallet-spec
+[submodule "devnet/contracts"]
+	path = devnet/contracts
+	url = https://github.com/perun-network/perun-ckb-contract.git
