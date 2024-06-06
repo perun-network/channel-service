@@ -6,19 +6,21 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
+	"github.com/perun-network/perun-libp2p-wire/p2p"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"perun.network/channel-service/deployment"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/service"
 	"perun.network/channel-service/wallet"
-	"perun.network/go-perun/wire"
 	"perun.network/perun-ckb-backend/backend"
 	"perun.network/perun-ckb-backend/wallet/address"
 	"perun.network/perun-ckb-backend/wallet/external"
@@ -37,15 +39,15 @@ func main() {
 
 	// Define command-line flags
 	nodeURL := flag.String("node-url", "", "CKB node URL")
-	host := flag.String("host", "", "Where to host Channel Service Server, e.g. localhost:4321")
+	hostA := flag.String("hostA", "", "Where to host Alice Channel Service Server, e.g. localhost:4321")
+	hostB := flag.String("hostB", "", "Where to host Bob Channel Service Server, e.g. localhost:4321")
 	aliceWssURL := flag.String("alice-wss-url", "", "URL of the WalletServiceServer e.g. localhost:1234")
 	bobWssURL := flag.String("bob-wss-url", "", "URL of the WalletServiceServer e.g. localhost:1234")
-
 	flag.Parse()
 
 	// Check if the node URL is provided
-	if *nodeURL == "" || *host == "" || *aliceWssURL == "" || *bobWssURL == "" {
-		fmt.Printf("Usage:\n%s -node-url <node_url> -host <host_url> -alice-wss-url <wallet_service_url> -bob-wss-url <wallet_service_url> [public_key1] [public_key2] ...\n", filepath.Base(os.Args[0]))
+	if *nodeURL == "" || *hostA == "" || *hostB == "" || *aliceWssURL == "" || *bobWssURL == "" {
+		fmt.Printf("Usage:\n%s -node-url <node_url> -hostA <host_url> -hostB <host_url> -alice-wss-url <wallet_service_url> -bob-wss-url <wallet_service_url> [public_key1] [public_key2] ...\n", filepath.Base(os.Args[0]))
 		os.Exit(1)
 	}
 	args := flag.Args()
@@ -87,8 +89,33 @@ func main() {
 	if err != nil {
 		log.Fatalf("error getting deployment: %v", err)
 	}
-	bus := wire.NewLocalBus()
-	cs, err := service.NewChannelService(nil, bus, types.NetworkTest, *nodeURL, d)
+
+	wireAccA := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
+	netA, err := p2p.NewP2PBus(wireAccA)
+	if err != nil {
+		log.Fatalf("creating p2p net: %v", err)
+	}
+	go netA.Bus.Listen(netA.Listener)
+
+	// AddressRessolver Alice
+	arA := service.NewRelayServerResolver(wireAccA)
+
+	csA, err := service.NewChannelService(nil, netA, types.NetworkTest, *nodeURL, d, wireAccA.Address(), arA)
+	if err != nil {
+		log.Fatalf("error setting up channel service: %v", err)
+	}
+
+	wireAccB := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
+	netB, err := p2p.NewP2PBus(wireAccB)
+	if err != nil {
+		log.Fatalf("creating p2p net: %v", err)
+	}
+	go netB.Bus.Listen(netB.Listener)
+
+	// AddressRessolver Bob
+	arB := service.NewRelayServerResolver(wireAccB)
+
+	csB, err := service.NewChannelService(nil, netB, types.NetworkTest, *nodeURL, d, wireAccB.Address(), arB)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)
 	}
@@ -97,9 +124,9 @@ func main() {
 	// Initialize Users
 	for i, part := range parts {
 		if i == 0 {
-			_, err = cs.InitializeUser(part, aliceWSC, external.NewWallet(wallet.NewExternalClient(aliceWSC)))
+			_, err = csA.InitializeUser(part, aliceWSC, external.NewWallet(wallet.NewExternalClient(aliceWSC)))
 		} else {
-			_, err = cs.InitializeUser(part, bobWSC, external.NewWallet(wallet.NewExternalClient(bobWSC)))
+			_, err = csB.InitializeUser(part, bobWSC, external.NewWallet(wallet.NewExternalClient(bobWSC)))
 		}
 		if err != nil {
 			log.Fatalf("error initializing user: %v", err)
@@ -107,17 +134,30 @@ func main() {
 	}
 
 	// Set up ChannelService Server
-	lis, err := net.Listen("tcp", *host)
+	lisA, err := net.Listen("tcp", *hostA)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
-	proto.RegisterChannelServiceServer(grpcServer, cs)
-	err = grpcServer.Serve(lis)
+	grpcServerA := grpc.NewServer(opts...)
+	proto.RegisterChannelServiceServer(grpcServerA, csA)
+	err = grpcServerA.Serve(lisA)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	lisB, err := net.Listen("tcp", *hostB)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	grpcServerB := grpc.NewServer(opts...)
+	proto.RegisterChannelServiceServer(grpcServerB, csB)
+	err = grpcServerB.Serve(lisB)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func MakeParticipants(pks []secp256k1.PublicKey) ([]address.Participant, error) {
