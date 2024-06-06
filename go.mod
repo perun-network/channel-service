@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0
-	github.com/perun-network/perun-libp2p-wire v0.0.0-20240514121025-635388735967
+	github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/sync v0.6.0

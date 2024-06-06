@@ -90,16 +90,17 @@ func main() {
 		log.Fatalf("error getting deployment: %v", err)
 	}
 
-	// AddressRessolver
-	ar := service.NewMutexLocalAddressResolver()
-
 	wireAccA := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
 	netA, err := p2p.NewP2PBus(wireAccA)
 	if err != nil {
 		log.Fatalf("creating p2p net: %v", err)
 	}
 	go netA.Bus.Listen(netA.Listener)
-	csA, err := service.NewChannelService(nil, netA, types.NetworkTest, *nodeURL, d, wireAccA.Address(), ar)
+
+	// AddressRessolver Alice
+	arA := service.NewRelayServerResolver(wireAccA)
+
+	csA, err := service.NewChannelService(nil, netA, types.NetworkTest, *nodeURL, d, wireAccA.Address(), arA)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)
 	}
@@ -110,7 +111,11 @@ func main() {
 		log.Fatalf("creating p2p net: %v", err)
 	}
 	go netB.Bus.Listen(netB.Listener)
-	csB, err := service.NewChannelService(nil, netB, types.NetworkTest, *nodeURL, d, wireAccB.Address(), ar)
+
+	// AddressRessolver Bob
+	arB := service.NewRelayServerResolver(wireAccB)
+
+	csB, err := service.NewChannelService(nil, netB, types.NetworkTest, *nodeURL, d, wireAccB.Address(), arB)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)
 	}

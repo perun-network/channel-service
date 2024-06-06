@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"perun.network/channel-service/channel/test"
+	"github.com/perun-network/channel-service/channel/test"
 	"perun.network/go-perun/channel"
 )
 
