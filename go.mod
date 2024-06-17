@@ -6,12 +6,10 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0
 	github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c
-	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
-	perun.network/go-perun v0.10.7-0.20240220134748-0b444cb3a6e7
+	perun.network/go-perun v0.11.0
 	perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
 )
@@ -90,6 +88,7 @@ require (
 	github.com/multiformats/go-multistream v0.2.0 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
@@ -108,6 +107,7 @@ require (
 	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
+	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.17.0 // indirect

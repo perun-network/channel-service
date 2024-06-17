@@ -471,8 +471,6 @@ github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYr
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
 github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20230601140721-2bf596fddd80 h1:45S239s+5oGVJHakd+BjfZmstG7wHnA8Tkeq43R9eFA=
 github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20230601140721-2bf596fddd80/go.mod h1:nPpBML8fuaM1NgkKCwv2gSHiCv+xKH43fu8LA9LOQUg=
-github.com/perun-network/perun-libp2p-wire v0.0.0-20240514121025-635388735967 h1:m+63gl1KMpLdseyNEKLnUFrCYipD9Q0Cnf/hmOwAkhs=
-github.com/perun-network/perun-libp2p-wire v0.0.0-20240514121025-635388735967/go.mod h1:kA/iWKN+2BvzxuUllMmd1IY6H2oKUZ18U+60hrY19EM=
 github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c h1:e2+S5ikuEVTVSvMhVW0Y6qPalFxi6n8DdlbsI6K4cGA=
 github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c/go.mod h1:kA/iWKN+2BvzxuUllMmd1IY6H2oKUZ18U+60hrY19EM=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
@@ -712,8 +710,8 @@ honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWh
 honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.1-2019.2.3 h1:3JgtbtFHMiCmsznwGVTUWbgGov+pVqnlf1dEJTNAXeM=
 honnef.co/go/tools v0.0.1-2019.2.3/go.mod h1:a3bituU0lyd329TUQxRnasdCoJDkEUEAqEt0JzvZhAg=
-perun.network/go-perun v0.10.7-0.20240220134748-0b444cb3a6e7 h1:dM3eZuUeNTRY4u83YpNtESGwMW/E6cCkW5Hcs1bMM5Y=
-perun.network/go-perun v0.10.7-0.20240220134748-0b444cb3a6e7/go.mod h1:pY/1pJ2OMlCQgEbnfGh9wVfRMJtqN0iAKsiJBLH0/Gc=
+perun.network/go-perun v0.11.0 h1:25aL0MsyXQ2rHziOnMwJMe70K6NTCbopZMwX67qxt/k=
+perun.network/go-perun v0.11.0/go.mod h1:pY/1pJ2OMlCQgEbnfGh9wVfRMJtqN0iAKsiJBLH0/Gc=
 perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166 h1:Y/3rPrDpspxiMDkh43sV7lkmbSDTM+m37e66kDEidR0=
 perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166/go.mod h1:Ebp1GCFpmlSlxuP+fSO9yk/qAllF+6GhRCe7b2533zs=
 polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37 h1:iA5GzEa/hHfVlQpimEjPV09NATwHXxSjWNB0VVodtew=

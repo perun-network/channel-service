@@ -101,6 +101,10 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 		panic(err)
 	}
 	u.Channels[ch.ID()] = ch
+	u.startWatching(ch)
+	ch.OnUpdate(u.NotifyAllState)
+	u.NotifyAllState(nil, ch.State())
+
 }
 
 func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
@@ -140,10 +144,12 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	if err != nil {
 		return channel.ID{}, fmt.Errorf("proposing channel: %w", err)
 	}
+	ch.OnUpdate(u.NotifyAllState)
 	u.startWatching(ch)
 	u.usrMutex.Lock()
 	defer u.usrMutex.Unlock()
 	u.Channels[ch.ID()] = ch
+	u.NotifyAllState(nil, ch.State())
 	return ch.ID(), nil
 }
 
@@ -158,6 +164,7 @@ func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *chan
 		return err
 	}
 	err := ch.Update(ctxt, UpdateToState(newState))
+
 	return err
 }
 
@@ -197,7 +204,7 @@ func (u *User) CloseChannel(ctxt context.Context, id channel.ID) error {
 	}
 
 	// Settle concludes the channel and withdraws the funds.
-	err := ch.Settle(ctxt)
+	err := ch.Settle(ctxt, false)
 	if err != nil {
 		panic(err)
 	}
@@ -225,4 +232,23 @@ func (u *User) GetChannels() []channel.State {
 		states = append(states, *ch.State().Clone())
 	}
 	return states
+}
+
+func (u *User) NotifyAllState(from, to *channel.State) {
+	u.usrMutex.Lock()
+	defer u.usrMutex.Unlock()
+	pbNewState, err := protobuf.FromState(to.Clone())
+	if err != nil {
+		panic(fmt.Sprintf("unable to encode state: %v", err))
+	}
+
+	resp, err := u.wsc.UpdateNotification(context.TODO(), &proto.UpdateNotificationRequest{
+		State: pbNewState,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("unable to send update notification to wallet: %v", err))
+	}
+	if !resp.GetAccepted() {
+		panic("wallet rejected update")
+	}
 }
