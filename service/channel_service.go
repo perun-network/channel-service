@@ -318,7 +318,7 @@ func (c ChannelService) GetChallengeDurationFromChannelOpenRequest(request *prot
 }
 
 func (c ChannelService) AddWireAddress(participant address.Participant) (wire.Address, error) {
-	return c.resolver.AddWire(&participant, c.wireAddr)
+	return c.wireAddr, c.resolver.SetWire(&participant, c.wireAddr)
 }
 
 func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address {
