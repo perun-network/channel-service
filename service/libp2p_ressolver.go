@@ -30,10 +30,6 @@ func (r *RelayServerResolver) GetWireAddress(walletAddr wallet.Address) (wire.Ad
 		return nil, ErrAddrNotFound
 	}
 
-	if !r.Address().Equal(waddr) {
-		return nil, ErrAddrNotMatch
-	}
-
 	return waddr, nil
 }
 
