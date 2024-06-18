@@ -131,6 +131,7 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 }
 
 func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *channel.Allocation, challengeDuration uint64) (channel.ID, error) {
+	u.usrMutex.Lock()
 	proposal, err := client.NewLedgerChannelProposal(
 		challengeDuration,
 		&u.Participant,
@@ -146,9 +147,8 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	}
 	ch.OnUpdate(u.NotifyAllState)
 	u.startWatching(ch)
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	u.Channels[ch.ID()] = ch
+	u.usrMutex.Unlock()
 	u.NotifyAllState(nil, ch.State())
 	return ch.ID(), nil
 }
@@ -235,6 +235,7 @@ func (u *User) GetChannels() []channel.State {
 }
 
 func (u *User) NotifyAllState(from, to *channel.State) {
+	log.Print("Notifying wallet service about state update")
 	u.usrMutex.Lock()
 	defer u.usrMutex.Unlock()
 	pbNewState, err := protobuf.FromState(to.Clone())
