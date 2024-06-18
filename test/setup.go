@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net"
+	defaultnet "net"
 	"os"
 	"testing"
 	"time"
@@ -43,7 +43,7 @@ const (
 	bufSize    = 1024 * 1024
 )
 
-var lis *bufconn.Listener
+//var lis *bufconn.Listener
 
 type Setup struct {
 	t                   *testing.T
@@ -115,6 +115,19 @@ func NewTestSetup(t *testing.T) *Setup {
 	setup.AccNets = []*p2p.Net{aliceNet, bobNet}
 
 	//setup channel-service
+	fmt.Printf("aliceWireAcc: %v\n", aliceWireAcc)
+	fmt.Printf("bobWireAcc: %v\n", bobWireAcc)
+	aliceWireAccAddrString, ok := aliceWireAcc.Address().(*p2p.Address)
+	if !ok {
+		log.Printf("error casting to p2p.Address")
+	}
+	log.Printf("aliceWireAccAddrString: %v", aliceWireAccAddrString)
+	bobWireAccAddrString, ok := bobWireAcc.Address().(*p2p.Address)
+	if !ok {
+		log.Printf("error casting to p2p.Address")
+	}
+	log.Printf("bobWireAccAddrString: %v", bobWireAccAddrString)
+
 	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, aliceNet, Network, rpcNodeURL, d, aliceWireAcc.Address(), ar)
 	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, bobNet, Network, rpcNodeURL, d, bobWireAcc.Address(), ar)
 	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
@@ -147,41 +160,54 @@ func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClien
 	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver)
 	require.NoError(t, err, "error setting up channel service for %s", name)
 	lis := bufconn.Listen(bufSize)
-	s := grpc.NewServer()
-	proto.RegisterChannelServiceServer(s, cs)
+	baseServer := grpc.NewServer()
+	log.Printf("Registering channel service server for %s", name)
+	proto.RegisterChannelServiceServer(baseServer, cs)
 	go func() {
-		err := s.Serve(lis)
+		err := baseServer.Serve(lis)
 		require.NoError(t, err, "Server exited with error for %s", name)
 	}()
-	conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(func(context.Context, string) (defaultnet.Conn, error) {
+		return lis.Dial()
+
+	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Failed to dial bufnet for %s", name)
 
 	return proto.NewChannelServiceClient(conn), cs, func() {
-		conn.Close()
-		s.GracefulStop()
+		err := lis.Close()
+		if err != nil {
+			log.Printf("error closing listener: %v", err)
+		}
+		baseServer.Stop()
+		//conn.Close()
+		//baseServer.GracefulStop()
 	}
 }
 
 func (set *Setup) setupWalletService(t *testing.T, name string, ctx context.Context, account *ckbwallet.Account, privateKey *secp256k1.PrivateKey, network types.Network) (proto.WalletServiceClient, func()) {
-	lis = bufconn.Listen(bufSize)
-	wsc := test.NewWalletServiceServer(account, privateKey, network)
+	lis := bufconn.Listen(bufSize)
+	wsc := test.NewWalletServiceServer(name, account, privateKey, network)
 	set.WalletServices = append(set.WalletServices, wsc)
-	s := grpc.NewServer()
-	proto.RegisterWalletServiceServer(s, wsc)
+	baseServer := grpc.NewServer()
+	proto.RegisterWalletServiceServer(baseServer, wsc)
 	go func() {
-		err := s.Serve(lis)
+		err := baseServer.Serve(lis)
 		require.NoError(t, err, "Server exited with error for %s", name)
 	}()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(func(context.Context, string) (defaultnet.Conn, error) {
+		return lis.Dial()
+	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Failed to dial bufnet for %s", name)
-	return proto.NewWalletServiceClient(conn), func() {
-		conn.Close()
-		s.GracefulStop()
-	}
-}
 
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
+	return proto.NewWalletServiceClient(conn), func() {
+		err := lis.Close()
+		if err != nil {
+			log.Printf("error closing listener: %v", err)
+		}
+		baseServer.Stop()
+		//conn.Close()
+		//baseServer.GracefulStop()
+	}
 }
 
 func MakeParticipants(pks []*secp256k1.PublicKey) ([]ckbaddr.Participant, error) {

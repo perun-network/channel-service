@@ -15,3 +15,11 @@
 *.log
 ./.vscode
 /.idea
+
+test/devnet/accounts
+test/devnet/data
+test/devnet/specs
+test/devnet/ckb-miner.toml
+test/devnet/ckb.toml
+test/devnet/default.db-options
+test/devnet/system_scripts

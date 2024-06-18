@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/big"
 
-	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 	gpchannel "perun.network/go-perun/channel"
 	perunproto "perun.network/go-perun/wire/protobuf"
@@ -21,17 +20,29 @@ func NewChannelOpenRequest(requester address.Participant, peer address.Participa
 		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to convert allocation: %w", err)
 	}
 
-	requesterCkbAddr, err := requester.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+	/*
+		requesterCkbAddr, err := requester.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+		if err != nil {
+			return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode requester address: %w", err)
+		}
+		requesterCkbAddrInBytes := []byte(requesterCkbAddr)
+		peerCkbAddr, err := peer.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+		if err != nil {
+			return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode peer address: %w", err)
+		}
+		peerCkbAddrInBytes := []byte(peerCkbAddr)
+	*/
+	requesterPart, err := requester.PackOffChainParticipant()
 	if err != nil {
-		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode requester address: %w", err)
+		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack requester participant: %w", err)
 	}
-	requesterCkbAddrInBytes := []byte(requesterCkbAddr)
-	peerCkbAddr, err := peer.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+	log.Printf("Requester: %v", requesterPart)
+	requesterCkbAddrInBytes := requesterPart.AsSlice()
+	peerPart, err := peer.PackOffChainParticipant()
 	if err != nil {
-		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode peer address: %w", err)
+		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack peer participant: %w", err)
 	}
-	peerCkbAddrInBytes := []byte(peerCkbAddr)
-
+	peerCkbAddrInBytes := peerPart.AsSlice()
 	return proto.ChannelOpenRequest{
 		Requester:         requesterCkbAddrInBytes,
 		Peer:              peerCkbAddrInBytes,

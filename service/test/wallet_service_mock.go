@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"perun.network/channel-service/utils"
+	"perun.network/go-perun/client"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
-	"perun.network/go-perun/client"
 	"perun.network/perun-ckb-backend/backend"
 	"perun.network/perun-ckb-backend/wallet"
 	"perun.network/perun-ckb-backend/wallet/address"
@@ -17,6 +17,7 @@ import (
 
 // test implementation for wallet API
 type MyWalletService struct {
+	name                           string
 	account                        *wallet.Account
 	privateKey                     *secp256k1.PrivateKey
 	network                        types.Network
@@ -27,8 +28,9 @@ type MyWalletService struct {
 	proto.UnimplementedWalletServiceServer
 }
 
-func NewWalletServiceServer(acc *wallet.Account, privKey *secp256k1.PrivateKey, network types.Network) *MyWalletService {
+func NewWalletServiceServer(name string, acc *wallet.Account, privKey *secp256k1.PrivateKey, network types.Network) *MyWalletService {
 	return &MyWalletService{
+		name:       name,
 		account:    acc,
 		privateKey: privKey,
 		network:    network,
@@ -43,17 +45,51 @@ func (wsc *MyWalletService) OpenChannel(ctx context.Context, in *proto.OpenChann
 	}
 }
 
-// sets default for wallet's response for incoming channel reqeuests. True sets to accept all proposals. False sets it to reject
+// SetOpenChannelResponse sets default for wallet's response for incoming channel requests. True sets to accept all proposals. False sets it to reject
 func (wsc *MyWalletService) SetOpenChannelResponse(flag bool) {
 	wsc.openChannelResponseFlag = flag
 }
 
 func openChannelAccepted() (*proto.OpenChannelResponse, error) {
 	nonceShare := client.WithRandomNonce()["nonce"]
+	// Check if nonceShare is of type [32]byte
+	nonceShareArray, ok := nonceShare.([32]byte)
+	if ok {
+		// Convert the array to a slice
+		nonceShareBytes := nonceShareArray[:]
+		return &proto.OpenChannelResponse{
+			Msg: &proto.OpenChannelResponse_NonceShare{
+				NonceShare: nonceShareBytes,
+			}}, nil
+	}
+
+	// If it's not [32]byte, check if it's already a byte slice
+	nonceShareBytes, ok := nonceShare.([]byte)
+	if !ok {
+		log.Fatal("nonceShare is not a byte array")
+	}
+
 	return &proto.OpenChannelResponse{
 		Msg: &proto.OpenChannelResponse_NonceShare{
-			NonceShare: nonceShare.([]byte),
+			NonceShare: nonceShareBytes,
 		}}, nil
+
+	/*nonceShareBytes, ok := nonceShare.([]byte)
+
+	if !ok {
+		log.Fatal("nonceShare is not a byte array")
+	}*/
+
+	/*	nonceShare := make([]byte, 32)
+		_, err := rand.Read(nonceShare)
+		if err != nil {
+			log.Println("Error generating nonce share", err)
+			return nil, err
+		}*/
+	/*return &proto.OpenChannelResponse{
+	Msg: &proto.OpenChannelResponse_NonceShare{
+		NonceShare: nonceShareBytes,
+	}}, nil*/
 }
 
 func openChannelRejected() (*proto.OpenChannelResponse, error) {
@@ -75,7 +111,7 @@ func (wsc *MyWalletService) UpdateNotification(ctx context.Context, in *proto.Up
 	}
 }
 
-// set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates
+// SetUpdateNotificationResponse set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates
 func (wsc *MyWalletService) SetUpdateNotificationResponse(flag bool) {
 	wsc.updateNotificationResponseFlag = flag
 }
@@ -100,7 +136,7 @@ func (wsc *MyWalletService) SignMessage(ctx context.Context, in *proto.SignMessa
 	}
 }
 
-// set default response for SignMessage. True sets wallet to sign all messages, false rejects all requests to sign message
+// SetSignMessageResponse set default response for SignMessage. True sets wallet to sign all messages, false rejects all requests to sign message
 func (wsc *MyWalletService) SetSignMessageResponse(flag bool) {
 	wsc.signMessageResponseFlag = flag
 }
@@ -135,20 +171,21 @@ func (wsc *MyWalletService) SignTransaction(ctx context.Context, tx *proto.SignT
 	}
 }
 
-// set default response for SignTransaction. True sets wallet to sign all tx requests, and false to reject all tx requests
+// SetSignTransactionResponse set default response for SignTransaction. True sets wallet to sign all tx requests, and false to reject all tx requests
 func (wsc *MyWalletService) SetSignTransactionResponse(flag bool) {
-	wsc.signMessageResponseFlag = flag
+	wsc.signTransactionResponseFlag = flag
 }
 
 func (wsc *MyWalletService) signedTransactionAccepted(tx *proto.SignTransactionRequest) (*proto.SignTransactionResponse, error) {
 	ckbAddr := address.AsParticipant(wsc.account.Address()).ToCKBAddress(wsc.network)
 	txSigner := backend.NewSignerInstance(ckbAddr, *wsc.privateKey, types.NetworkTest)
-	txWithScriptGroups := &transaction.TransactionWithScriptGroups{}
-	err := json.Unmarshal(tx.Transaction, txWithScriptGroups)
+	wrappedTx := &utils.TransactionWithScriptGroupsWrapper{}
+
+	err := json.Unmarshal(tx.Transaction, wrappedTx)
 	if err != nil {
 		log.Println("Error unmarshalling transaction", err)
 	}
-	signedTx, err := txSigner.SignTransaction(txWithScriptGroups)
+	signedTx, err := txSigner.SignTransaction(wrappedTx.TransactionWithScriptGroups)
 	if err != nil {
 		log.Println("Error signing transaction", err)
 	}
@@ -156,6 +193,7 @@ func (wsc *MyWalletService) signedTransactionAccepted(tx *proto.SignTransactionR
 	if err != nil {
 		log.Println("Error marshalling signed transaction", err)
 	}
+	log.Println("SUCCESS: " + wsc.name + " successfully signed transaction")
 	return &proto.SignTransactionResponse{
 		Msg: &proto.SignTransactionResponse_Transaction{
 			Transaction: signedTxBytes,
@@ -174,7 +212,7 @@ func (wsc *MyWalletService) signedTransationRejected() (*proto.SignTransactionRe
 
 }
 
-// sets default response for GetAssets().
+// SetGetAssetsResponse sets default response for GetAssets().
 func (wsc *MyWalletService) SetGetAssetsResponse(flag bool) {}
 
 func (wsc *MyWalletService) GetAssets(ctx context.Context, in *proto.GetAssetsRequest) (*proto.GetAssetsResponse, error) {

@@ -35,7 +35,13 @@ func runRestoreChannels(t *testing.T) {
 	bobWalletService := setup.WalletServices[1]
 
 	aliceWalletService.SetOpenChannelResponse(true)
+	aliceWalletService.SetSignMessageResponse(true)
+	aliceWalletService.SetSignTransactionResponse(true)
+
 	bobWalletService.SetOpenChannelResponse(true)
+	bobWalletService.SetSignMessageResponse(true)
+	bobWalletService.SetSignTransactionResponse(true)
+
 	assetsmap := map[channel.Asset]float64{
 		&ckbasset.Asset{
 			IsCKBytes: true,
@@ -45,6 +51,7 @@ func runRestoreChannels(t *testing.T) {
 	// open channel
 	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
 	require.NoError(t, err)
+
 	openChannelResp, err := aliceChannelServiceClient.OpenChannel(context.Background(), &aliceChannelOpenRequest)
 	require.NoError(t, err)
 	require.NotNil(t, openChannelResp)
