@@ -235,8 +235,6 @@ func (u *User) GetChannels() []channel.State {
 }
 
 func (u *User) NotifyAllState(from, to *channel.State) {
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
 		panic(fmt.Sprintf("unable to encode state: %v", err))
