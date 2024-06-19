@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"perun.network/channel-service/utils"
+
+	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
 	"perun.network/go-perun/client"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -25,6 +26,7 @@ type MyWalletService struct {
 	updateNotificationResponseFlag bool
 	signMessageResponseFlag        bool
 	signTransactionResponseFlag    bool
+	updateNotificationCounter      int
 	proto.UnimplementedWalletServiceServer
 }
 
@@ -35,6 +37,10 @@ func NewWalletServiceServer(name string, acc *wallet.Account, privKey *secp256k1
 		privateKey: privKey,
 		network:    network,
 	}
+}
+
+func (wsc *MyWalletService) SetUpdateNotificationCounter(counter int) {
+	wsc.updateNotificationCounter = counter
 }
 
 func (wsc *MyWalletService) OpenChannel(ctx context.Context, in *proto.OpenChannelRequest) (*proto.OpenChannelResponse, error) {
@@ -73,23 +79,6 @@ func openChannelAccepted() (*proto.OpenChannelResponse, error) {
 		Msg: &proto.OpenChannelResponse_NonceShare{
 			NonceShare: nonceShareBytes,
 		}}, nil
-
-	/*nonceShareBytes, ok := nonceShare.([]byte)
-
-	if !ok {
-		log.Fatal("nonceShare is not a byte array")
-	}*/
-
-	/*	nonceShare := make([]byte, 32)
-		_, err := rand.Read(nonceShare)
-		if err != nil {
-			log.Println("Error generating nonce share", err)
-			return nil, err
-		}*/
-	/*return &proto.OpenChannelResponse{
-	Msg: &proto.OpenChannelResponse_NonceShare{
-		NonceShare: nonceShareBytes,
-	}}, nil*/
 }
 
 func openChannelRejected() (*proto.OpenChannelResponse, error) {
@@ -103,12 +92,19 @@ func openChannelRejected() (*proto.OpenChannelResponse, error) {
 }
 
 func (wsc *MyWalletService) UpdateNotification(ctx context.Context, in *proto.UpdateNotificationRequest) (*proto.UpdateNotificationResponse, error) {
-	if wsc.updateNotificationResponseFlag {
+	if wsc.updateNotificationCounter > 0 {
+		wsc.updateNotificationCounter--
 		return updateNotificationAccepted()
 	} else {
 		return updateNotificationRejected()
-
 	}
+	/*
+		if wsc.updateNotificationResponseFlag {
+			return updateNotificationAccepted()
+		} else {
+			return updateNotificationRejected()
+		}
+	*/
 }
 
 // SetUpdateNotificationResponse set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates
@@ -179,13 +175,13 @@ func (wsc *MyWalletService) SetSignTransactionResponse(flag bool) {
 func (wsc *MyWalletService) signedTransactionAccepted(tx *proto.SignTransactionRequest) (*proto.SignTransactionResponse, error) {
 	ckbAddr := address.AsParticipant(wsc.account.Address()).ToCKBAddress(wsc.network)
 	txSigner := backend.NewSignerInstance(ckbAddr, *wsc.privateKey, types.NetworkTest)
-	wrappedTx := &utils.TransactionWithScriptGroupsWrapper{}
-
-	err := json.Unmarshal(tx.Transaction, wrappedTx)
+	//wrappedTx := &utils.TransactionWithScriptGroupsWrapper{}
+	txWithScriptGroups := transaction.TransactionWithScriptGroups{}
+	err := json.Unmarshal(tx.Transaction, &txWithScriptGroups)
 	if err != nil {
 		log.Println("Error unmarshalling transaction", err)
 	}
-	signedTx, err := txSigner.SignTransaction(wrappedTx.TransactionWithScriptGroups)
+	signedTx, err := txSigner.SignTransaction(&txWithScriptGroups)
 	if err != nil {
 		log.Println("Error signing transaction", err)
 	}

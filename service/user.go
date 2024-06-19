@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"sync"
-
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
+	"log"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/channel/persistence"
@@ -23,8 +21,6 @@ var ErrChannelNotFound = errors.New("channel not found")
 
 // User handles all channel related operations for a single user (wire / wallet address pair).
 type User struct {
-	usrMutex sync.Mutex
-
 	Channels    map[channel.ID]*client.Channel
 	Participant address.Participant
 	PerunClient *client.Client
@@ -59,6 +55,7 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 	if err != nil {
 		panic(fmt.Sprintf("encoding participant addr: %v", err))
 	}
+	log.Printf("Handling channel proposal as user: %s", u.Participant)
 	log.Printf("Handling channel proposal as user: %s", addr)
 	lcp, ok := proposal.(*client.LedgerChannelProposalMsg)
 	if !ok {
@@ -130,8 +127,34 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 	return u, nil
 }
 
+func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) {
+	perunClient, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	if err != nil {
+		log.Printf("Erro creating new client for user: %v", err)
+		panic(err)
+	}
+	perunClient.EnablePersistence(pr)
+	u.PerunClient = perunClient
+}
+
+func (u *User) RestoreChannels(ctx context.Context) error {
+	// Restore all channels for this user.
+	channels := make(map[channel.ID]*client.Channel)
+
+	u.PerunClient.OnNewChannel(func(ch *client.Channel) {
+		channels[ch.ID()] = ch
+	})
+
+	err := u.PerunClient.Restore(ctx)
+	if err != nil {
+		log.Fatalf("Error restoring channels in user.go: %v", err)
+		return err
+	}
+	u.Channels = channels
+	return nil
+}
+
 func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *channel.Allocation, challengeDuration uint64) (channel.ID, error) {
-	u.usrMutex.Lock()
 	proposal, err := client.NewLedgerChannelProposal(
 		challengeDuration,
 		&u.Participant,
@@ -148,14 +171,11 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	ch.OnUpdate(u.NotifyAllState)
 	u.startWatching(ch)
 	u.Channels[ch.ID()] = ch
-	u.usrMutex.Unlock()
 	u.NotifyAllState(nil, ch.State())
 	return ch.ID(), nil
 }
 
 func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) error {
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	ch, ok := u.Channels[id]
 	if !ok {
 		return ErrChannelNotFound
@@ -187,8 +207,6 @@ func UpdateToState(ns *channel.State) func(state *channel.State) {
 }
 
 func (u *User) CloseChannel(ctxt context.Context, id channel.ID) error {
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	ch, ok := u.Channels[id]
 	if !ok {
 		return ErrChannelNotFound
@@ -236,8 +254,6 @@ func (u *User) GetChannels() []channel.State {
 
 func (u *User) NotifyAllState(from, to *channel.State) {
 	log.Print("Notifying wallet service about state update")
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
 		panic(fmt.Sprintf("unable to encode state: %v", err))

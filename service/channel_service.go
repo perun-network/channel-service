@@ -2,20 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"github.com/perun-network/perun-libp2p-wire/p2p"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"log"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/channel/persistence"
-	gclient "perun.network/go-perun/client"
 	gpwallet "perun.network/go-perun/wallet"
-	"perun.network/go-perun/watcher"
 	"perun.network/go-perun/watcher/local"
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
@@ -39,11 +38,12 @@ type ChannelService struct {
 
 	wireAddr wire.Address
 	resolver AddressResolver
+	pr       persistence.PersistRestorer
 
 	proto.UnimplementedChannelServiceServer // always embed
 }
 
-func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.Network, nodeUrl string, deployment backend.Deployment, wireAddr wire.Address, res AddressResolver) (*ChannelService, error) {
+func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.Network, nodeUrl string, deployment backend.Deployment, wireAddr wire.Address, res AddressResolver, pr persistence.PersistRestorer) (*ChannelService, error) {
 	node, err := rpc.Dial(nodeUrl)
 	if err != nil {
 		return nil, err
@@ -58,6 +58,7 @@ func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.
 		wallet:     external.NewWallet(wallet.NewExternalClient(c)),
 		wireAddr:   wireAddr,
 		resolver:   res,
+		pr:         pr,
 	}
 
 	return cs, nil
@@ -88,7 +89,8 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 	c.net.Dialer.Register(peer, peerLibp2pAddr.String())
 
 	challengeDuration := c.GetChallengeDurationFromChannelOpenRequest(request)
-	log.Printf("Opening channel with peer %s", request.GetPeer())
+	log.Printf("about to open channel with peer")
+	//log.Printf("Opening channel with peer %s", request.GetPeer())
 	id, err := user.OpenChannel(ctx, peer, allocation, challengeDuration)
 	log.Println("Opening request returned")
 	if err != nil {
@@ -231,7 +233,6 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	return c.user, nil
 }
 
-// Maybe this function is not needed -> move to demo?
 func (c *ChannelService) InitializeUser(participant address.Participant, wsc proto.WalletServiceClient, w gpwallet.Wallet) (*User, error) {
 	log.Printf("Initializing user %s", participant)
 
@@ -250,8 +251,8 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	if err != nil {
 		return nil, err
 	}
-	pr := persistence.NonPersistRestorer
-	usr, err := NewUser(participant, wAddr, c.net.Bus, f, adj, w, watcher, wsc, pr)
+	//pr := persistence.NonPersistRestorer
+	usr, err := NewUser(participant, wAddr, c.net.Bus, f, adj, w, watcher, wsc, c.pr)
 	if err != nil {
 		return nil, err
 	}
@@ -325,15 +326,49 @@ func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address 
 	return addr.ToCKBAddress(c.network)
 }
 
-func (c *ChannelService) ClosePerunClient() {
-	c.user.PerunClient.Close()
+func (c ChannelService) ClosePerunClient(ctx context.Context, empty *emptypb.Empty) (*emptypb.Empty, error) {
+	err := c.user.PerunClient.Close()
+	if err != nil {
+		log.Fatalf("Error closing perun client: %v", err)
+		return nil, err
+	}
+	c.user.Channels = nil
+	return &emptypb.Empty{}, nil
 }
 
-func (c *ChannelService) NewperunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet gpwallet.Wallet, watcher watcher.Watcher) {
-	client, err := gclient.New(wAddr, bus, funder, adjudicator, wallet, watcher)
-	if err != nil {
-		log.Println("Error creating new PerunClient")
+func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPerunClientRequest) (*proto.NewPerunClientResponse, error) {
+	/*
+		addr := address.Participant{}
+		err := addr.UnmarshalBinary(request.GetParticiapnt())
+		if err != nil {
+			log.Fatalf("Error unmarshaling participant: %v", err)
+			return &proto.NewPerunClientResponse{Accepted: false}, err
+		}
+	*/
+	addr := c.user.Participant
+	if c.user == nil {
+		log.Fatalf("User not found")
+		return &proto.NewPerunClientResponse{Accepted: false}, errors.New("user not found")
 	}
-	c.user.PerunClient = client
+	wAddr := c.wireAddr
+	rs := wallet.NewRemoteSigner(c.wsc, c.ToCKBAddress(addr))
+	ckbClient, err := client.NewClient(c.node, rs, c.deployment)
+	if err != nil {
+		log.Fatalf("Error creating client: %v", err)
+		return &proto.NewPerunClientResponse{Accepted: false}, err
+	}
+	f := funder.NewDefaultFunder(ckbClient, c.deployment)
+	adj := adjudicator.NewAdjudicator(ckbClient)
+	watcher, err := local.NewWatcher(adj)
+	if err != nil {
+		log.Fatalf("Error creating watcher: %v", err)
+		return &proto.NewPerunClientResponse{Accepted: false}, err
+	}
+	c.user.NewPerunClient(wAddr, c.net.Bus, f, adj, c.wallet, watcher, c.wsc, c.pr)
+	return &proto.NewPerunClientResponse{Accepted: true}, nil
+}
 
+func (c ChannelService) RestoreChannels(ctx context.Context, request *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
+	c.user.RestoreChannels(ctx)
+	return &proto.RestoreChannelsResponse{Accepted: true}, nil
 }

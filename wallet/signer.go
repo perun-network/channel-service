@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"perun.network/channel-service/utils"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
@@ -29,10 +28,8 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 	if err != nil {
 		return nil, err
 	}
-	//log.Printf("Transaction to sign: %v\n", tx)
 
-	wrappedTx := &utils.TransactionWithScriptGroupsWrapper{tx}
-	txBytes, err := json.Marshal(wrappedTx)
+	txBytes, err := json.Marshal(tx)
 
 	if err != nil {
 		return nil, err

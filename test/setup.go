@@ -46,17 +46,16 @@ const (
 //var lis *bufconn.Listener
 
 type Setup struct {
-	t                   *testing.T
-	Deployment          backend.Deployment
-	SUDTInfo            deployment.SUDTInfo
-	WalletAccs          []*ckbwallet.Account
-	AccNets             []*p2p.Net
-	AccPersistRestorers []persistence.PersistRestorer
-	Asset               asset.Asset
-	AccKeys             []*secp256k1.PrivateKey
-	WireAccs            []*p2p.Account
-	Participants        []ckbaddr.Participant
-
+	t                          *testing.T
+	Deployment                 backend.Deployment
+	SUDTInfo                   deployment.SUDTInfo
+	WalletAccs                 []*ckbwallet.Account
+	AccNets                    []*p2p.Net
+	AccPersistRestorers        []persistence.PersistRestorer
+	Asset                      asset.Asset
+	AccKeys                    []*secp256k1.PrivateKey
+	WireAccs                   []*p2p.Account
+	Participants               []ckbaddr.Participant
 	WalletServiceClients       []proto.WalletServiceClient
 	WscCleanupFuncs            []func()
 	WalletServices             []*test.MyWalletService
@@ -128,15 +127,14 @@ func NewTestSetup(t *testing.T) *Setup {
 	}
 	log.Printf("bobWireAccAddrString: %v", bobWireAccAddrString)
 
-	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, aliceNet, Network, rpcNodeURL, d, aliceWireAcc.Address(), ar)
-	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, bobNet, Network, rpcNodeURL, d, bobWireAcc.Address(), ar)
-	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
-	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
-
 	prAlice := keyvalue.NewPersistRestorer(memorydb.NewDatabase())
 	prBob := keyvalue.NewPersistRestorer(memorydb.NewDatabase())
 	setup.AccPersistRestorers = []persistence.PersistRestorer{prAlice, prBob}
 
+	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, aliceNet, Network, rpcNodeURL, d, aliceWireAcc.Address(), ar, prAlice)
+	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, bobNet, Network, rpcNodeURL, d, bobWireAcc.Address(), ar, prBob)
+	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
+	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
 	log.Printf("Participants: %v", parts)
 
 	// Initialize Users
@@ -156,8 +154,8 @@ func NewTestSetup(t *testing.T) *Setup {
 	return setup
 }
 
-func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, net *p2p.Net, network types.Network, rpcNodeUrl string, d backend.Deployment, wireAddr wire.Address, addrResolver service.AddressResolver) (proto.ChannelServiceClient, *service.ChannelService, func()) {
-	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver)
+func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, net *p2p.Net, network types.Network, rpcNodeUrl string, d backend.Deployment, wireAddr wire.Address, addrResolver service.AddressResolver, pr persistence.PersistRestorer) (proto.ChannelServiceClient, *service.ChannelService, func()) {
+	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver, pr)
 	require.NoError(t, err, "error setting up channel service for %s", name)
 	lis := bufconn.Listen(bufSize)
 	baseServer := grpc.NewServer()
