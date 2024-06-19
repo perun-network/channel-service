@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
@@ -23,8 +22,6 @@ var ErrChannelNotFound = errors.New("channel not found")
 
 // User handles all channel related operations for a single user (wire / wallet address pair).
 type User struct {
-	usrMutex sync.Mutex
-
 	Channels    map[channel.ID]*client.Channel
 	Participant address.Participant
 	PerunClient *client.Client
@@ -146,16 +143,12 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	}
 	ch.OnUpdate(u.NotifyAllState)
 	u.startWatching(ch)
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	u.Channels[ch.ID()] = ch
 	u.NotifyAllState(nil, ch.State())
 	return ch.ID(), nil
 }
 
 func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) error {
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	ch, ok := u.Channels[id]
 	if !ok {
 		return ErrChannelNotFound
@@ -187,8 +180,6 @@ func UpdateToState(ns *channel.State) func(state *channel.State) {
 }
 
 func (u *User) CloseChannel(ctxt context.Context, id channel.ID) error {
-	u.usrMutex.Lock()
-	defer u.usrMutex.Unlock()
 	ch, ok := u.Channels[id]
 	if !ok {
 		return ErrChannelNotFound
