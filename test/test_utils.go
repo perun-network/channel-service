@@ -1,11 +1,11 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
 
-	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 	gpchannel "perun.network/go-perun/channel"
 	perunproto "perun.network/go-perun/wire/protobuf"
@@ -20,23 +20,68 @@ func NewChannelOpenRequest(requester address.Participant, peer address.Participa
 	if err != nil {
 		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to convert allocation: %w", err)
 	}
-
-	requesterCkbAddr, err := requester.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+	requesterPart, err := requester.PackOffChainParticipant()
 	if err != nil {
-		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode requester address: %w", err)
+		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack requester participant: %w", err)
 	}
-	requesterCkbAddrInBytes := []byte(requesterCkbAddr)
-	peerCkbAddr, err := peer.ToCKBAddress(types.NetworkTest).EncodeFullBech32m()
+	log.Printf("Requester: %v", requesterPart)
+	requesterCkbAddrInBytes := requesterPart.AsSlice()
+	peerPart, err := peer.PackOffChainParticipant()
 	if err != nil {
-		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to encode peer address: %w", err)
+		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack peer participant: %w", err)
 	}
-	peerCkbAddrInBytes := []byte(peerCkbAddr)
-
+	peerCkbAddrInBytes := peerPart.AsSlice()
 	return proto.ChannelOpenRequest{
 		Requester:         requesterCkbAddrInBytes,
 		Peer:              peerCkbAddrInBytes,
 		Allocation:        protAlloc,
 		ChallengeDuration: uint64(challengeDuration),
+	}, nil
+}
+
+func NewPerunClientRequest() *proto.NewPerunClientRequest {
+	return &proto.NewPerunClientRequest{}
+}
+
+func GetChannelsRequest(requestingParty []byte) *proto.GetChannelsRequest {
+	return &proto.GetChannelsRequest{
+		Requester: requestingParty,
+	}
+}
+
+func NewChannelUpdateRequest(channelID gpchannel.ID, chState *gpchannel.State, amounts map[gpchannel.Asset]float64) (*proto.ChannelUpdateRequest, error) {
+	// Channel update request contains a protobuf.State which is the protbuf message type for channel state
+	// thus I need to create a channel state with the updated balances, convert it back to protobuf and then create the ChannelUpdateRequest
+	// to create a new channel state with updated balances, I can take the old state of the participant who's proposing the new update
+	// and then change the allocation to the new allocation
+	// thus I need access to the user struct of the participant
+	if channelID != chState.ID {
+		log.Println("Channel ID mismatch")
+		return nil, errors.New("your error message")
+	}
+
+	// 0 for Alice, 1 for Bob
+	actorIdx := gpchannel.Index(0)
+	peerIdx := 1 - actorIdx
+
+	for assetType, amount := range amounts {
+		if amount < 0 {
+			continue
+		}
+		assetType := assetType.(*asset.Asset)
+		if assetType.IsCKBytes {
+			shannonAmount := cKByteToShannon(big.NewFloat(amount))
+			chState.Allocation.TransferBalance(actorIdx, peerIdx, assetType, shannonAmount)
+		}
+	}
+
+	protoState, err := perunproto.FromState(chState)
+	if err != nil {
+		log.Fatalf("Error: Cannot convert channel state to protobuf state")
+		return nil, err
+	}
+	return &proto.ChannelUpdateRequest{
+		State: protoState,
 	}, nil
 
 }
@@ -73,7 +118,6 @@ func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 	}
 	log.Println("Created Allocation")
 	return initAlloc
-
 }
 
 // CKByteToShannon converts a given amount in CKByte to Shannon.

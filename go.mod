@@ -4,11 +4,12 @@ go 1.19
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
+	github.com/golang/protobuf v1.5.4
 	github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0
 	github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	perun.network/go-perun v0.11.0
 	perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
@@ -26,7 +27,6 @@ require (
 	github.com/flynn/noise v0.0.0-20180327030543-2492fe189ae6 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gopacket v1.1.17 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
@@ -116,3 +116,7 @@ require (
 )
 
 replace github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0 => github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20240618093616-6d9d92aa863d
+
+//replace perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166 => /home/mek/code/perun-ckb-backend
+
+//replace perun.network/go-perun v0.11.0 => /home/mek/code/go-perun

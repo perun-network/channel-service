@@ -100,7 +100,7 @@ func main() {
 	// AddressRessolver Alice
 	arA := service.NewRelayServerResolver(wireAccA)
 
-	csA, err := service.NewChannelService(nil, netA, types.NetworkTest, *nodeURL, d, wireAccA.Address(), arA)
+	csA, err := service.NewChannelService(nil, netA, types.NetworkTest, *nodeURL, d, wireAccA.Address(), arA, nil)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)
 	}
@@ -115,7 +115,7 @@ func main() {
 	// AddressRessolver Bob
 	arB := service.NewRelayServerResolver(wireAccB)
 
-	csB, err := service.NewChannelService(nil, netB, types.NetworkTest, *nodeURL, d, wireAccB.Address(), arB)
+	csB, err := service.NewChannelService(nil, netB, types.NetworkTest, *nodeURL, d, wireAccB.Address(), arB, nil)
 	if err != nil {
 		log.Fatalf("error setting up channel service: %v", err)
 	}

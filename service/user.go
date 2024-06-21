@@ -56,6 +56,7 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 	if err != nil {
 		panic(fmt.Sprintf("encoding participant addr: %v", err))
 	}
+	log.Printf("Handling channel proposal as user: %s", u.Participant)
 	log.Printf("Handling channel proposal as user: %s", addr)
 	lcp, ok := proposal.(*client.LedgerChannelProposalMsg)
 	if !ok {
@@ -125,6 +126,33 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 	}
 	go c.Handle(u, u)
 	return u, nil
+}
+
+func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) {
+	perunClient, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	if err != nil {
+		log.Printf("Erro creating new client for user: %v", err)
+		panic(err)
+	}
+	perunClient.EnablePersistence(pr)
+	u.PerunClient = perunClient
+}
+
+func (u *User) RestoreChannels(ctx context.Context) error {
+	// Restore all channels for this user.
+	channels := make(map[channel.ID]*client.Channel)
+
+	u.PerunClient.OnNewChannel(func(ch *client.Channel) {
+		channels[ch.ID()] = ch
+	})
+
+	err := u.PerunClient.Restore(ctx)
+	if err != nil {
+		log.Fatalf("Error restoring channels in user.go: %v", err)
+		return err
+	}
+	u.Channels = channels
+	return nil
 }
 
 func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *channel.Allocation, challengeDuration uint64) (channel.ID, error) {
@@ -226,6 +254,7 @@ func (u *User) GetChannels() []channel.State {
 }
 
 func (u *User) NotifyAllState(from, to *channel.State) {
+	log.Print("Notifying wallet service about state update")
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
 		panic(fmt.Sprintf("unable to encode state: %v", err))
