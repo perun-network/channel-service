@@ -187,6 +187,8 @@ func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *chan
 	if err := VerifyStateTransition(ch.State().Clone(), newState.Clone()); err != nil {
 		return err
 	}
+
+	log.Println("Updating channel on PerunClient")
 	err := ch.Update(ctxt, UpdateToState(newState))
 
 	return err
