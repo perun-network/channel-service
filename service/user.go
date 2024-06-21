@@ -143,6 +143,9 @@ func (u *User) RestoreChannels(ctx context.Context) error {
 	channels := make(map[channel.ID]*client.Channel)
 
 	u.PerunClient.OnNewChannel(func(ch *client.Channel) {
+		u.startWatching(ch)
+		ch.OnUpdate(u.NotifyAllState)
+		u.NotifyAllState(nil, ch.State())
 		channels[ch.ID()] = ch
 	})
 
