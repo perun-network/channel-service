@@ -135,6 +135,8 @@ func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.F
 		panic(err)
 	}
 	perunClient.EnablePersistence(pr)
+	go perunClient.Handle(u, u)
+
 	u.PerunClient = perunClient
 }
 
