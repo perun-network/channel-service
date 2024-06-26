@@ -5,15 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	defaultnet "net"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
-	"github.com/perun-network/perun-libp2p-wire/p2p"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -23,11 +20,10 @@ import (
 	"perun.network/channel-service/service"
 	"perun.network/channel-service/service/test"
 	chwallet "perun.network/channel-service/wallet"
+	"polycry.pt/poly-go/sortedkv"
 	"polycry.pt/poly-go/sortedkv/memorydb"
 
 	"perun.network/go-perun/channel/persistence"
-	"perun.network/go-perun/channel/persistence/keyvalue"
-	"perun.network/go-perun/wire"
 
 	"perun.network/perun-ckb-backend/backend"
 	"perun.network/perun-ckb-backend/channel/asset"
@@ -38,23 +34,20 @@ import (
 
 const (
 	rpcNodeURL = "http://localhost:8114"
-	Network    = types.NetworkTest
+	Network    = types.NetworkTest // Network is the network used for testing.
 	devNetDir  = "test/devnet"
 	bufSize    = 1024 * 1024
 )
 
-//var lis *bufconn.Listener
-
+// Setup contains all the necessary information for testing.
 type Setup struct {
 	t                          *testing.T
 	Deployment                 backend.Deployment
 	SUDTInfo                   deployment.SUDTInfo
 	WalletAccs                 []*ckbwallet.Account
-	AccNets                    []*p2p.Net
 	AccPersistRestorers        []persistence.PersistRestorer
 	Asset                      asset.Asset
 	AccKeys                    []*secp256k1.PrivateKey
-	WireAccs                   []*p2p.Account
 	Participants               []ckbaddr.Participant
 	WalletServiceClients       []proto.WalletServiceClient
 	WscCleanupFuncs            []func()
@@ -63,6 +56,7 @@ type Setup struct {
 	ChannelServiceCleanupFuncs []func()
 }
 
+// NewTestSetup creates a new setup for testing.
 func NewTestSetup(t *testing.T) *Setup {
 	setup := &Setup{}
 	setup.t = t
@@ -100,39 +94,11 @@ func NewTestSetup(t *testing.T) *Setup {
 	// AddressRessolver
 	ar := service.NewMutexLocalAddressResolver()
 
-	aliceWireAcc := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
-	aliceNet, err := p2p.NewP2PBus(aliceWireAcc)
-	require.NoError(t, err, "error creating p2p net")
-	go aliceNet.Bus.Listen(aliceNet.Listener)
+	aliceDB := memorydb.NewDatabase()
+	bobDB := memorydb.NewDatabase()
 
-	bobWireAcc := p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
-	bobNet, err := p2p.NewP2PBus(bobWireAcc)
-	require.NoError(t, err, "error creating p2p net")
-	go bobNet.Bus.Listen(bobNet.Listener)
-
-	setup.WireAccs = []*p2p.Account{aliceWireAcc, bobWireAcc}
-	setup.AccNets = []*p2p.Net{aliceNet, bobNet}
-
-	//setup channel-service
-	fmt.Printf("aliceWireAcc: %v\n", aliceWireAcc)
-	fmt.Printf("bobWireAcc: %v\n", bobWireAcc)
-	aliceWireAccAddrString, ok := aliceWireAcc.Address().(*p2p.Address)
-	if !ok {
-		log.Printf("error casting to p2p.Address")
-	}
-	log.Printf("aliceWireAccAddrString: %v", aliceWireAccAddrString)
-	bobWireAccAddrString, ok := bobWireAcc.Address().(*p2p.Address)
-	if !ok {
-		log.Printf("error casting to p2p.Address")
-	}
-	log.Printf("bobWireAccAddrString: %v", bobWireAccAddrString)
-
-	prAlice := keyvalue.NewPersistRestorer(memorydb.NewDatabase())
-	prBob := keyvalue.NewPersistRestorer(memorydb.NewDatabase())
-	setup.AccPersistRestorers = []persistence.PersistRestorer{prAlice, prBob}
-
-	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, aliceNet, Network, rpcNodeURL, d, aliceWireAcc.Address(), ar, prAlice)
-	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, bobNet, Network, rpcNodeURL, d, bobWireAcc.Address(), ar, prBob)
+	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, Network, rpcNodeURL, d, ar, aliceDB)
+	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, Network, rpcNodeURL, d, ar, bobDB)
 	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
 	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
 	log.Printf("Participants: %v", parts)
@@ -154,8 +120,8 @@ func NewTestSetup(t *testing.T) *Setup {
 	return setup
 }
 
-func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, net *p2p.Net, network types.Network, rpcNodeUrl string, d backend.Deployment, wireAddr wire.Address, addrResolver service.AddressResolver, pr persistence.PersistRestorer) (proto.ChannelServiceClient, *service.ChannelService, func()) {
-	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver, pr, name)
+func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, network types.Network, rpcNodeUrl string, d backend.Deployment, addrResolver service.AddressResolver, db sortedkv.Database) (proto.ChannelServiceClient, *service.ChannelService, func()) {
+	cs, err := service.NewChannelService(wsc, network, rpcNodeUrl, d, nil, db)
 	require.NoError(t, err, "error setting up channel service for %s", name)
 	lis := bufconn.Listen(bufSize)
 	baseServer := grpc.NewServer()
@@ -204,6 +170,7 @@ func (set *Setup) setupWalletService(t *testing.T, name string, ctx context.Cont
 	}
 }
 
+// MakeParticipants creates a list of participants from a list of public keys.
 func MakeParticipants(pks []*secp256k1.PublicKey) ([]ckbaddr.Participant, error) {
 	parts := make([]ckbaddr.Participant, len(pks))
 	for i := range pks {
