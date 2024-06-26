@@ -13,7 +13,7 @@
 
 # log files
 *.log
-./.vscode
+/.vscode
 /.idea
 
 test/devnet/accounts

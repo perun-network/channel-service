@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
+
+	"google.golang.org/protobuf/types/known/emptypb"
 	"perun.network/channel-service/rpc/proto"
+
 	//"log"
 	//"net"
 	"testing"

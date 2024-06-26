@@ -16,7 +16,6 @@ import (
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
-// test implementation for wallet API
 type MyWalletService struct {
 	name                           string
 	account                        *wallet.Account
@@ -38,11 +37,6 @@ func NewWalletServiceServer(name string, acc *wallet.Account, privKey *secp256k1
 		network:    network,
 	}
 }
-
-func (wsc *MyWalletService) SetUpdateNotificationCounter(counter int) {
-	wsc.updateNotificationCounter = counter
-}
-
 func (wsc *MyWalletService) OpenChannel(ctx context.Context, in *proto.OpenChannelRequest) (*proto.OpenChannelResponse, error) {
 	if wsc.openChannelResponseFlag {
 		return openChannelAccepted()
@@ -92,19 +86,11 @@ func openChannelRejected() (*proto.OpenChannelResponse, error) {
 }
 
 func (wsc *MyWalletService) UpdateNotification(ctx context.Context, in *proto.UpdateNotificationRequest) (*proto.UpdateNotificationResponse, error) {
-	if wsc.updateNotificationCounter > 0 {
-		wsc.updateNotificationCounter--
+	if wsc.updateNotificationResponseFlag {
 		return updateNotificationAccepted()
 	} else {
 		return updateNotificationRejected()
 	}
-	/*
-		if wsc.updateNotificationResponseFlag {
-			return updateNotificationAccepted()
-		} else {
-			return updateNotificationRejected()
-		}
-	*/
 }
 
 // SetUpdateNotificationResponse set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates

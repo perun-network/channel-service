@@ -51,8 +51,14 @@ func (m *MutexLocalAddressResolver) GetWireAddress(walletAddr wallet.Address) (w
 func (m *MutexLocalAddressResolver) AddWire(walletAddr wallet.Address, wireAddr wire.Address) (wire.Address, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	if wire, ok := m.register[wallet.Key(walletAddr)]; ok {
-		return wire, ErrAddrExists
+	/*
+		if wire, ok := m.register[wallet.Key(walletAddr)]; ok {
+			return wire, ErrAddrExists
+		}
+	*/
+	addrKey := wallet.Key(walletAddr)
+	if wireV, ok := m.register[addrKey]; ok { // V in wireV means nothing. It is just there because we already have a pacakge called wire
+		return wireV, ErrAddrExists
 	}
 	m.register[wallet.Key(walletAddr)] = wireAddr
 	return wireAddr, nil

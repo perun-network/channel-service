@@ -22,6 +22,7 @@ var ErrChannelNotFound = errors.New("channel not found")
 
 // User handles all channel related operations for a single user (wire / wallet address pair).
 type User struct {
+	Name        string
 	Channels    map[channel.ID]*client.Channel
 	Participant address.Participant
 	PerunClient *client.Client
@@ -136,7 +137,6 @@ func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.F
 	}
 	perunClient.EnablePersistence(pr)
 	go perunClient.Handle(u, u)
-
 	u.PerunClient = perunClient
 }
 
@@ -181,19 +181,19 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	return ch.ID(), nil
 }
 
-func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) error {
+func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) (*channel.State, error) {
 	ch, ok := u.Channels[id]
 	if !ok {
-		return ErrChannelNotFound
+		return nil, ErrChannelNotFound
 	}
 	if err := VerifyStateTransition(ch.State().Clone(), newState.Clone()); err != nil {
-		return err
+		return nil, err
 	}
 
 	log.Println("Updating channel on PerunClient")
 	err := ch.Update(ctxt, UpdateToState(newState))
 
-	return err
+	return u.Channels[id].State(), err
 }
 
 func VerifyStateTransition(old, new *channel.State) error {
@@ -252,7 +252,6 @@ func (u *User) startWatching(ch *client.Channel) {
 }
 
 func (u *User) GetChannels() []channel.State {
-	// TODO: Consider concurrency issues.
 	var states []channel.State
 	for _, ch := range u.Channels {
 		states = append(states, *ch.State().Clone())

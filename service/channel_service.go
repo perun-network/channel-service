@@ -29,6 +29,7 @@ import (
 )
 
 type ChannelService struct {
+	name       string
 	user       *User
 	wsc        proto.WalletServiceClient
 	net        *p2p.Net
@@ -44,7 +45,7 @@ type ChannelService struct {
 	proto.UnimplementedChannelServiceServer // always embed
 }
 
-func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.Network, nodeUrl string, deployment backend.Deployment, wireAddr wire.Address, res AddressResolver, pr persistence.PersistRestorer) (*ChannelService, error) {
+func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.Network, nodeUrl string, deployment backend.Deployment, wireAddr wire.Address, res AddressResolver, pr persistence.PersistRestorer, name string) (*ChannelService, error) {
 	node, err := rpc.Dial(nodeUrl)
 	if err != nil {
 		return nil, err
@@ -60,6 +61,7 @@ func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.
 		wireAddr:   wireAddr,
 		resolver:   res,
 		pr:         pr,
+		name:       name,
 	}
 
 	return cs, nil
@@ -101,7 +103,7 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 }
 
 func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.ChannelUpdateRequest) (*proto.ChannelUpdateResponse, error) {
-	log.Println("Received channel update request")
+	log.Println("Channel Service received update request")
 	cid, user, err := c.GetChannelInfoFromRequest(request.State.GetId())
 	if err != nil {
 		return nil, err
@@ -110,15 +112,22 @@ func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.Channe
 	if err != nil {
 		return nil, err
 	}
-	err = user.UpdateChannel(ctx, cid, state)
+	newState, err := user.UpdateChannel(ctx, cid, state)
 	if err != nil {
+		if newState != nil {
+			panic("newState should be nil on error")
+		}
 		rejected := proto.Rejected{Reason: err.Error()}
 		return &proto.ChannelUpdateResponse{Msg: &proto.ChannelUpdateResponse_Rejected{Rejected: &rejected}}, err
 	}
 
+	newStateProto, err := protobuf.FromState(newState)
+	if err != nil {
+		return nil, err
+	}
+
 	return &proto.ChannelUpdateResponse{Msg: &proto.ChannelUpdateResponse_Update{Update: &proto.SuccessfulUpdate{
-		// TODO: Use actual resulting state instead of the request state.
-		State:     request.State,
+		State:     newStateProto,
 		ChannelId: cid[:],
 	}}}, nil
 }
@@ -254,6 +263,7 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	}
 	//pr := persistence.NonPersistRestorer
 	usr, err := NewUser(participant, wAddr, c.net.Bus, f, adj, w, watcher, wsc, c.pr)
+	usr.Name = c.name
 	if err != nil {
 		return nil, err
 	}
@@ -338,14 +348,6 @@ func (c ChannelService) ClosePerunClient(ctx context.Context, empty *emptypb.Emp
 }
 
 func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPerunClientRequest) (*proto.NewPerunClientResponse, error) {
-	/*
-		addr := address.Participant{}
-		err := addr.UnmarshalBinary(request.GetParticiapnt())
-		if err != nil {
-			log.Fatalf("Error unmarshaling participant: %v", err)
-			return &proto.NewPerunClientResponse{Accepted: false}, err
-		}
-	*/
 	addr := c.user.Participant
 	if c.user == nil {
 		log.Fatalf("User not found")
