@@ -155,7 +155,7 @@ func NewTestSetup(t *testing.T) *Setup {
 }
 
 func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, net *p2p.Net, network types.Network, rpcNodeUrl string, d backend.Deployment, wireAddr wire.Address, addrResolver service.AddressResolver, pr persistence.PersistRestorer) (proto.ChannelServiceClient, *service.ChannelService, func()) {
-	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver, pr)
+	cs, err := service.NewChannelService(wsc, net, network, rpcNodeUrl, d, wireAddr, addrResolver, pr, name)
 	require.NoError(t, err, "error setting up channel service for %s", name)
 	lis := bufconn.Listen(bufSize)
 	baseServer := grpc.NewServer()
@@ -177,8 +177,6 @@ func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClien
 			log.Printf("error closing listener: %v", err)
 		}
 		baseServer.Stop()
-		//conn.Close()
-		//baseServer.GracefulStop()
 	}
 }
 
@@ -203,8 +201,6 @@ func (set *Setup) setupWalletService(t *testing.T, name string, ctx context.Cont
 			log.Printf("error closing listener: %v", err)
 		}
 		baseServer.Stop()
-		//conn.Close()
-		//baseServer.GracefulStop()
 	}
 }
 

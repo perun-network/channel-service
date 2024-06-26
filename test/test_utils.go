@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 
 	"perun.network/channel-service/rpc/proto"
 	gpchannel "perun.network/go-perun/channel"
 	perunproto "perun.network/go-perun/wire/protobuf"
-	"perun.network/perun-ckb-backend/channel/asset"
+	ckbasset "perun.network/perun-ckb-backend/channel/asset"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
@@ -24,7 +25,7 @@ func NewChannelOpenRequest(requester address.Participant, peer address.Participa
 	if err != nil {
 		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack requester participant: %w", err)
 	}
-	log.Printf("Requester: %v", requesterPart)
+	//log.Printf("Requester: %v", requesterPart)
 	requesterCkbAddrInBytes := requesterPart.AsSlice()
 	peerPart, err := peer.PackOffChainParticipant()
 	if err != nil {
@@ -49,26 +50,21 @@ func GetChannelsRequest(requestingParty []byte) *proto.GetChannelsRequest {
 	}
 }
 
-func NewChannelUpdateRequest(channelID gpchannel.ID, chState *gpchannel.State, amounts map[gpchannel.Asset]float64) (*proto.ChannelUpdateRequest, error) {
-	// Channel update request contains a protobuf.State which is the protbuf message type for channel state
-	// thus I need to create a channel state with the updated balances, convert it back to protobuf and then create the ChannelUpdateRequest
-	// to create a new channel state with updated balances, I can take the old state of the participant who's proposing the new update
-	// and then change the allocation to the new allocation
-	// thus I need access to the user struct of the participant
+func NewChannelUpdateRequest(channelID gpchannel.ID, chState *gpchannel.State, amounts map[gpchannel.Asset]float64, senderId gpchannel.Index) (*proto.ChannelUpdateRequest, error) {
 	if channelID != chState.ID {
 		log.Println("Channel ID mismatch")
 		return nil, errors.New("your error message")
 	}
 
 	// 0 for Alice, 1 for Bob
-	actorIdx := gpchannel.Index(0)
+	actorIdx := senderId
 	peerIdx := 1 - actorIdx
 
 	for assetType, amount := range amounts {
 		if amount < 0 {
 			continue
 		}
-		assetType := assetType.(*asset.Asset)
+		assetType := assetType.(*ckbasset.Asset)
 		if assetType.IsCKBytes {
 			shannonAmount := cKByteToShannon(big.NewFloat(amount))
 			chState.Allocation.TransferBalance(actorIdx, peerIdx, assetType, shannonAmount)
@@ -98,7 +94,7 @@ func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 	log.Println(initAlloc.Assets)
 	for a, amount := range amounts {
 		switch a := a.(type) {
-		case *asset.Asset:
+		case *ckbasset.Asset:
 			if a.IsCKBytes {
 				initAlloc.SetAssetBalances(a, []gpchannel.Bal{
 					cKByteToShannon(big.NewFloat(amount)), // Our initial balance.
@@ -127,4 +123,40 @@ func cKByteToShannon(ckbyteAmount *big.Float) (shannonAmount *big.Int) {
 	shannonAmountFloat := new(big.Float).Mul(ckbyteAmount, shannonPerCKByteFloat)
 	shannonAmount, _ = shannonAmountFloat.Int(nil)
 	return shannonAmount
+}
+
+// ShannonToCKByte converts a given amount in Shannon to CKByte.
+func ShannonToCKByte(shannonAmount *big.Int) *big.Float {
+	shannonPerCKByte := new(big.Int).Exp(big.NewInt(10), big.NewInt(8), nil)
+	shannonPerCKByteFloat := new(big.Float).SetInt(shannonPerCKByte)
+	shannonAmountFloat := new(big.Float).SetInt(shannonAmount)
+	return new(big.Float).Quo(shannonAmountFloat, shannonPerCKByteFloat)
+}
+
+func AllocToString(alloc *gpchannel.Allocation) string {
+	var sbArr = make([]strings.Builder, len(alloc.Assets))
+	for idx, asset := range alloc.Assets {
+		fmt.Fprintf(&sbArr[idx], "Asset type:%v \n", getAssetType(asset))
+		fmt.Fprintf(&sbArr[idx], "Asset Allocation: ")
+		participant1Balance := ShannonToCKByte(alloc.Balances[idx][0])
+		participant2Balance := ShannonToCKByte(alloc.Balances[idx][1])
+		fmt.Fprintf(&sbArr[idx], "[%v,%v]", participant1Balance, participant2Balance)
+	}
+	if len(sbArr) == 0 {
+		return "No assets in allocation"
+	}
+
+	var sb strings.Builder
+	for _, v := range sbArr {
+		sb.WriteString(v.String())
+	}
+	return sb.String()
+}
+
+func getAssetType(asset gpchannel.Asset) string {
+	assetType := asset.(*ckbasset.Asset)
+	if assetType.IsCKBytes {
+		return "CKBytes"
+	}
+	return "SUDT"
 }
