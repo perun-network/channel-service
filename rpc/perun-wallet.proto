@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 import "wire.proto";
-import "google/protobuf/empty.proto";
 
 package perunservice;
 
@@ -16,28 +15,40 @@ service ChannelService {
   rpc UpdateChannel(ChannelUpdateRequest) returns (ChannelUpdateResponse);
   // Initiate channel closing.
   rpc CloseChannel(ChannelCloseRequest) returns (ChannelCloseResponse);
-  // Query the current state of the Channels.option
+  // Query the current state of the Channels
   rpc GetChannels(GetChannelsRequest) returns (GetChannelsResponse);
 
   rpc RestoreChannels(RestoreChannelsRequest) returns (RestoreChannelsResponse);
 
-  rpc ClosePerunClient(google.protobuf.Empty) returns (google.protobuf.Empty);
+  rpc ClosePerunClient(ClosePerunClientRequest) returns (ClosePerunClientResponse);
 
   rpc NewPerunClient(NewPerunClientRequest) returns (NewPerunClientResponse);
 }
 
 message RestoreChannelsRequest{
+  bytes data = 1;
 }
 
 message RestoreChannelsResponse{
   bool accepted = 1;
+  bytes data = 2;
 }
 
+message ClosePerunClientRequest{
+  bytes data = 1;
+}
+
+message ClosePerunClientResponse{
+  bool accepted = 1;
+  bytes data = 2;
+}
 message NewPerunClientRequest{
+  bytes data = 1;
 }
 
 message NewPerunClientResponse{
   bool accepted = 1;
+  bytes data = 2;
 }
 
 // Generic rejected message. Returned by any endpoint on failure.

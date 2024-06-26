@@ -8,7 +8,6 @@ package proto
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -29,10 +28,10 @@ type ChannelServiceClient interface {
 	UpdateChannel(ctx context.Context, in *ChannelUpdateRequest, opts ...grpc.CallOption) (*ChannelUpdateResponse, error)
 	// Initiate channel closing.
 	CloseChannel(ctx context.Context, in *ChannelCloseRequest, opts ...grpc.CallOption) (*ChannelCloseResponse, error)
-	// Query the current state of the Channels.option
+	// Query the current state of the Channels
 	GetChannels(ctx context.Context, in *GetChannelsRequest, opts ...grpc.CallOption) (*GetChannelsResponse, error)
 	RestoreChannels(ctx context.Context, in *RestoreChannelsRequest, opts ...grpc.CallOption) (*RestoreChannelsResponse, error)
-	ClosePerunClient(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	ClosePerunClient(ctx context.Context, in *ClosePerunClientRequest, opts ...grpc.CallOption) (*ClosePerunClientResponse, error)
 	NewPerunClient(ctx context.Context, in *NewPerunClientRequest, opts ...grpc.CallOption) (*NewPerunClientResponse, error)
 }
 
@@ -89,8 +88,8 @@ func (c *channelServiceClient) RestoreChannels(ctx context.Context, in *RestoreC
 	return out, nil
 }
 
-func (c *channelServiceClient) ClosePerunClient(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
-	out := new(empty.Empty)
+func (c *channelServiceClient) ClosePerunClient(ctx context.Context, in *ClosePerunClientRequest, opts ...grpc.CallOption) (*ClosePerunClientResponse, error) {
+	out := new(ClosePerunClientResponse)
 	err := c.cc.Invoke(ctx, "/perunservice.ChannelService/ClosePerunClient", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -117,10 +116,10 @@ type ChannelServiceServer interface {
 	UpdateChannel(context.Context, *ChannelUpdateRequest) (*ChannelUpdateResponse, error)
 	// Initiate channel closing.
 	CloseChannel(context.Context, *ChannelCloseRequest) (*ChannelCloseResponse, error)
-	// Query the current state of the Channels.option
+	// Query the current state of the Channels
 	GetChannels(context.Context, *GetChannelsRequest) (*GetChannelsResponse, error)
 	RestoreChannels(context.Context, *RestoreChannelsRequest) (*RestoreChannelsResponse, error)
-	ClosePerunClient(context.Context, *empty.Empty) (*empty.Empty, error)
+	ClosePerunClient(context.Context, *ClosePerunClientRequest) (*ClosePerunClientResponse, error)
 	NewPerunClient(context.Context, *NewPerunClientRequest) (*NewPerunClientResponse, error)
 	mustEmbedUnimplementedChannelServiceServer()
 }
@@ -144,7 +143,7 @@ func (UnimplementedChannelServiceServer) GetChannels(context.Context, *GetChanne
 func (UnimplementedChannelServiceServer) RestoreChannels(context.Context, *RestoreChannelsRequest) (*RestoreChannelsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreChannels not implemented")
 }
-func (UnimplementedChannelServiceServer) ClosePerunClient(context.Context, *empty.Empty) (*empty.Empty, error) {
+func (UnimplementedChannelServiceServer) ClosePerunClient(context.Context, *ClosePerunClientRequest) (*ClosePerunClientResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClosePerunClient not implemented")
 }
 func (UnimplementedChannelServiceServer) NewPerunClient(context.Context, *NewPerunClientRequest) (*NewPerunClientResponse, error) {
@@ -254,7 +253,7 @@ func _ChannelService_RestoreChannels_Handler(srv interface{}, ctx context.Contex
 }
 
 func _ChannelService_ClosePerunClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(empty.Empty)
+	in := new(ClosePerunClientRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -266,7 +265,7 @@ func _ChannelService_ClosePerunClient_Handler(srv interface{}, ctx context.Conte
 		FullMethod: "/perunservice.ChannelService/ClosePerunClient",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChannelServiceServer).ClosePerunClient(ctx, req.(*empty.Empty))
+		return srv.(ChannelServiceServer).ClosePerunClient(ctx, req.(*ClosePerunClientRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
