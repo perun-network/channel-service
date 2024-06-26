@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
@@ -15,6 +17,7 @@ import (
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/channel/persistence"
+	"perun.network/go-perun/channel/persistence/keyvalue"
 	gpwallet "perun.network/go-perun/wallet"
 	"perun.network/go-perun/watcher/local"
 	"perun.network/go-perun/wire"
@@ -26,8 +29,14 @@ import (
 	"perun.network/perun-ckb-backend/client"
 	"perun.network/perun-ckb-backend/wallet/address"
 	"perun.network/perun-ckb-backend/wallet/external"
+	"polycry.pt/poly-go/sortedkv"
 )
 
+const (
+	wirePrivateKey = "wire-account-private-key"
+)
+
+// ChannelService is the service for handling perun channel operations.
 type ChannelService struct {
 	user       *User
 	wsc        proto.WalletServiceClient
@@ -44,20 +53,61 @@ type ChannelService struct {
 	proto.UnimplementedChannelServiceServer // always embed
 }
 
-func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.Network, nodeUrl string, deployment backend.Deployment, wireAddr wire.Address, res AddressResolver, pr persistence.PersistRestorer) (*ChannelService, error) {
-	node, err := rpc.Dial(nodeUrl)
+// NewChannelService creates a new ChannelService.
+func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeURL string, deployment backend.Deployment, res AddressResolver, db sortedkv.Database) (*ChannelService, error) {
+	node, err := rpc.Dial(nodeURL)
 	if err != nil {
 		return nil, err
 	}
 
+	var wireAcc *p2p.Account
+	if b, err := db.Has(wirePrivateKey); err != nil {
+		return nil, err
+	} else if b {
+		wirePrivateKeyBytes, err := db.GetBytes(wirePrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("error getting wire account private key: %w", err)
+		}
+
+		wireAcc, err = p2p.NewAccountFromPrivateKeyBytes(wirePrivateKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error creating wire account from private key: %w", err)
+		}
+	} else {
+		wireAcc = p2p.NewRandomAccount(rand.New(rand.NewSource(time.Now().UnixNano())))
+
+		privKeyBytes, err := wireAcc.MarshalPrivateKey()
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling wire account private key: %w", err)
+		}
+		err = db.PutBytes(wirePrivateKey, privKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error storing wire account private key: %w", err)
+
+		}
+	}
+
+	wireNet, err := p2p.NewP2PBus(wireAcc)
+	if err != nil {
+		return nil, fmt.Errorf("error creating wire net: %w", err)
+	}
+
+	go wireNet.Bus.Listen(wireNet.Listener)
+
+	if res == nil {
+		res = NewRelayServerResolver(wireAcc)
+	}
+
+	pr := keyvalue.NewPersistRestorer(db)
+
 	cs := &ChannelService{
 		wsc:        c,
-		net:        net,
+		net:        wireNet,
 		network:    network,
 		node:       node,
 		deployment: deployment,
 		wallet:     external.NewWallet(wallet.NewExternalClient(c)),
-		wireAddr:   wireAddr,
+		wireAddr:   wireAcc.Address(),
 		resolver:   res,
 		pr:         pr,
 	}
@@ -65,6 +115,7 @@ func NewChannelService(c proto.WalletServiceClient, net *p2p.Net, network types.
 	return cs, nil
 }
 
+// OpenChannel opens a channel for the user.
 func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelOpenRequest) (*proto.ChannelOpenResponse, error) {
 	log.Println("Received channel open request")
 	user, err := c.GetUserFromChannelOpenRequest(request)
@@ -100,6 +151,7 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 	return &proto.ChannelOpenResponse{Msg: &proto.ChannelOpenResponse_ChannelId{ChannelId: id[:]}}, nil
 }
 
+// UpdateChannel updates the channel for the user.
 func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.ChannelUpdateRequest) (*proto.ChannelUpdateResponse, error) {
 	log.Println("Received channel update request")
 	cid, user, err := c.GetChannelInfoFromRequest(request.State.GetId())
@@ -117,12 +169,12 @@ func (c ChannelService) UpdateChannel(ctx context.Context, request *proto.Channe
 	}
 
 	return &proto.ChannelUpdateResponse{Msg: &proto.ChannelUpdateResponse_Update{Update: &proto.SuccessfulUpdate{
-		// TODO: Use actual resulting state instead of the request state.
 		State:     request.State,
 		ChannelId: cid[:],
 	}}}, nil
 }
 
+// CloseChannel closes the channel for the user.
 func (c ChannelService) CloseChannel(ctx context.Context, request *proto.ChannelCloseRequest) (*proto.ChannelCloseResponse, error) {
 	cid, user, err := c.GetChannelInfoFromRequest(request.GetChannelId())
 	if err != nil {
@@ -130,12 +182,12 @@ func (c ChannelService) CloseChannel(ctx context.Context, request *proto.Channel
 	}
 	err = user.CloseChannel(ctx, cid)
 	if err != nil {
-		// TODO: Do we want to return the error here?
 		return &proto.ChannelCloseResponse{Msg: &proto.ChannelCloseResponse_Rejected{Rejected: &proto.Rejected{Reason: err.Error()}}}, err
 	}
 	return &proto.ChannelCloseResponse{Msg: &proto.ChannelCloseResponse_Close{Close: &proto.SuccessfulClose{ChannelId: cid[:]}}}, nil
 }
 
+// GetChannels returns the channels for the user.
 func (c ChannelService) GetChannels(ctx context.Context, request *proto.GetChannelsRequest) (*proto.GetChannelsResponse, error) {
 	u, err := c.getUserFromGetChannelsRequest(request)
 	//log.Println("GetChannels request received")
@@ -179,6 +231,7 @@ func (c ChannelService) getUserFromGetChannelsRequest(request *proto.GetChannels
 	return nil, fmt.Errorf("user %s not found", addr)
 }
 
+// AsChannelID converts a byte slice to a channel ID.
 func AsChannelID(in []byte) (channel.ID, error) {
 	id := channel.ID{}
 	n := copy(id[:], in)
@@ -188,11 +241,13 @@ func AsChannelID(in []byte) (channel.ID, error) {
 	return id, nil
 }
 
+// AsChannelState converts a protobuf state to a channel state.
 func AsChannelState(ps *protobuf.State) (*channel.State, error) {
 	log.Println("Converting protobuf state to channel state")
 	return protobuf.ToState(ps)
 }
 
+// GetChannelInfoFromRequest returns the channel ID and user from the request.
 func (c ChannelService) GetChannelInfoFromRequest(reqChannelId []byte) (channel.ID, *User, error) {
 	cid, err := AsChannelID(reqChannelId)
 	if err != nil {
@@ -204,6 +259,7 @@ func (c ChannelService) GetChannelInfoFromRequest(reqChannelId []byte) (channel.
 	return cid, c.user, err
 }
 
+// GetUserFromChannelOpenRequest returns the user from the channel open request.
 func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpenRequest) (*User, error) {
 	requester := request.GetRequester()
 	if requester == nil {
@@ -234,11 +290,12 @@ func (c ChannelService) GetUserFromChannelOpenRequest(request *proto.ChannelOpen
 	return c.user, nil
 }
 
+// InitializeUser initializes a user with the given participant.
 func (c *ChannelService) InitializeUser(participant address.Participant, wsc proto.WalletServiceClient, w gpwallet.Wallet) (*User, error) {
 	log.Printf("Initializing user %s", participant)
 
-	wAddr, err := c.AddWireAddress(participant)
-	if err != nil && err != ErrAddrExists {
+	wAddr, err := c.SetWireAddress(participant)
+	if err != nil {
 		return nil, err
 	}
 	rs := wallet.NewRemoteSigner(wsc, c.ToCKBAddress(participant))
@@ -252,7 +309,6 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	if err != nil {
 		return nil, err
 	}
-	//pr := persistence.NonPersistRestorer
 	usr, err := NewUser(participant, wAddr, c.net.Bus, f, adj, w, watcher, wsc, c.pr)
 	if err != nil {
 		return nil, err
@@ -299,6 +355,7 @@ func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, erro
 	return alloc, nil
 }
 
+// GetPeerAddressFromChannelOpenRequest returns the peer address from the channel open request.
 func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) (wire.Address, error) {
 	// NOTE: The peer address should probably be a string-encoded CKB Address (see MakeDefaultWireAddress).
 	peer := request.GetPeer()
@@ -319,14 +376,17 @@ func (c ChannelService) GetChallengeDurationFromChannelOpenRequest(request *prot
 	return request.ChallengeDuration
 }
 
-func (c ChannelService) AddWireAddress(participant address.Participant) (wire.Address, error) {
+// SetWireAddress sets the wire address for the given participant.
+func (c ChannelService) SetWireAddress(participant address.Participant) (wire.Address, error) {
 	return c.wireAddr, c.resolver.SetWire(&participant, c.wireAddr)
 }
 
+// ToCKBAddress converts a participant address to a CKB address.
 func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address {
 	return addr.ToCKBAddress(c.network)
 }
 
+// ClosePerunClient closes the Perun client for the user.
 func (c ChannelService) ClosePerunClient(ctx context.Context, empty *emptypb.Empty) (*emptypb.Empty, error) {
 	err := c.user.PerunClient.Close()
 	if err != nil {
@@ -337,15 +397,8 @@ func (c ChannelService) ClosePerunClient(ctx context.Context, empty *emptypb.Emp
 	return &emptypb.Empty{}, nil
 }
 
+// NewPerunClient creates a new Perun client for the user.
 func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPerunClientRequest) (*proto.NewPerunClientResponse, error) {
-	/*
-		addr := address.Participant{}
-		err := addr.UnmarshalBinary(request.GetParticiapnt())
-		if err != nil {
-			log.Fatalf("Error unmarshaling participant: %v", err)
-			return &proto.NewPerunClientResponse{Accepted: false}, err
-		}
-	*/
 	addr := c.user.Participant
 	if c.user == nil {
 		log.Fatalf("User not found")
@@ -369,6 +422,7 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 	return &proto.NewPerunClientResponse{Accepted: true}, nil
 }
 
+// RestoreChannels restores the channels for the user.
 func (c ChannelService) RestoreChannels(ctx context.Context, request *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
 	c.user.RestoreChannels(ctx)
 	return &proto.RestoreChannelsResponse{Accepted: true}, nil

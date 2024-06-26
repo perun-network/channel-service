@@ -1,12 +1,12 @@
 module perun.network/channel-service
 
-go 1.19
+go 1.20
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/golang/protobuf v1.5.4
 	github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0
-	github.com/perun-network/perun-libp2p-wire v0.0.0-20240604094050-faeb97e75f3c
+	github.com/perun-network/perun-libp2p-wire v0.1.1
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.33.0
@@ -118,5 +118,3 @@ require (
 replace github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0 => github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20240618093616-6d9d92aa863d
 
 //replace perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166 => /home/mek/code/perun-ckb-backend
-
-//replace perun.network/go-perun v0.11.0 => /home/mek/code/go-perun

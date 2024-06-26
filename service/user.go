@@ -18,6 +18,7 @@ import (
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
+// ErrChannelNotFound is returned when a channel with the specified ID is not found.
 var ErrChannelNotFound = errors.New("channel not found")
 
 // User handles all channel related operations for a single user (wire / wallet address pair).
@@ -29,7 +30,8 @@ type User struct {
 	wsc         proto.WalletServiceClient
 }
 
-func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate, responder *client.UpdateResponder) {
+// HandleUpdate handles a channel update.
+func (u *User) HandleUpdate(_ *channel.State, update client.ChannelUpdate, responder *client.UpdateResponder) {
 	pbNewState, err := protobuf.FromState(update.State.Clone())
 	if err != nil {
 		_ = responder.Reject(context.TODO(), "unable to encode state")
@@ -51,6 +53,7 @@ func (u *User) HandleUpdate(oldState *channel.State, update client.ChannelUpdate
 
 }
 
+// HandleProposal handles a channel proposal.
 func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) { // ASSUMPTION: the responder parameter contains the same perun client which this user has
 	addr, err := u.Participant.ToCKBAddress(types.NetworkTest).Encode()
 	if err != nil {
@@ -105,12 +108,14 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 
 }
 
+// HandleAdjudicatorEvent handles an adjudicator event.
 func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	// TODO: Do we need to do anything here?
 	// TODO: Inform wallet service server about event.
 	log.Printf("Adjudicator event: type = %T", event)
 }
 
+// NewUser creates a new user with the specified participant, wire address, bus, funder, adjudicator, wallet, watcher, wallet service client and persistence.
 func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) (*User, error) {
 	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
 	c.EnablePersistence(pr) //automatically saves channels to persistence
@@ -128,6 +133,7 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 	return u, nil
 }
 
+// NewPerunClient creates a new Perun client for the user.
 func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) {
 	perunClient, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
 	if err != nil {
@@ -140,6 +146,7 @@ func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.F
 	u.PerunClient = perunClient
 }
 
+// RestoreChannels restores all channels for the user.
 func (u *User) RestoreChannels(ctx context.Context) error {
 	// Restore all channels for this user.
 	channels := make(map[channel.ID]*client.Channel)
@@ -160,6 +167,7 @@ func (u *User) RestoreChannels(ctx context.Context) error {
 	return nil
 }
 
+// OpenChannel opens a new channel with the specified peer.
 func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *channel.Allocation, challengeDuration uint64) (channel.ID, error) {
 	proposal, err := client.NewLedgerChannelProposal(
 		challengeDuration,
@@ -181,6 +189,7 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *
 	return ch.ID(), nil
 }
 
+// UpdateChannel updates the channel with the specified ID to the new state.
 func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *channel.State) error {
 	ch, ok := u.Channels[id]
 	if !ok {
@@ -196,11 +205,13 @@ func (u *User) UpdateChannel(ctxt context.Context, id channel.ID, newState *chan
 	return err
 }
 
+// VerifyStateTransition verifies that the transition from the old state to the new state is valid.
 func VerifyStateTransition(old, new *channel.State) error {
 	// TODO: implement
 	return nil
 }
 
+// UpdateToAllocation returns a function that updates the state of a channel to the specified allocation.
 func UpdateToAllocation(alloc channel.Allocation) func(state *channel.State) {
 	return func(state *channel.State) {
 		// TODO: Properly update allocation with checks etc.
@@ -208,12 +219,14 @@ func UpdateToAllocation(alloc channel.Allocation) func(state *channel.State) {
 	}
 }
 
+// UpdateToState returns a function that updates the state of a channel to the specified state.
 func UpdateToState(ns *channel.State) func(state *channel.State) {
 	return func(state *channel.State) {
 		*state = *ns
 	}
 }
 
+// CloseChannel closes the channel with the specified ID.
 func (u *User) CloseChannel(ctxt context.Context, id channel.ID) error {
 	ch, ok := u.Channels[id]
 	if !ok {
@@ -251,6 +264,7 @@ func (u *User) startWatching(ch *client.Channel) {
 	}()
 }
 
+// GetChannels returns the current state of all channels.
 func (u *User) GetChannels() []channel.State {
 	// TODO: Consider concurrency issues.
 	var states []channel.State
@@ -260,7 +274,8 @@ func (u *User) GetChannels() []channel.State {
 	return states
 }
 
-func (u *User) NotifyAllState(from, to *channel.State) {
+// NotifyAllState notifies the wallet service about the new state of the channel.
+func (u *User) NotifyAllState(_, to *channel.State) {
 	log.Print("Notifying wallet service about state update")
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
