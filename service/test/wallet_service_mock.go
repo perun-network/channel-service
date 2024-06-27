@@ -7,6 +7,7 @@ import (
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
 	"perun.network/go-perun/client"
+	"perun.network/go-perun/wire/protobuf"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
@@ -26,6 +27,9 @@ type MyWalletService struct {
 	signMessageResponseFlag        bool
 	signTransactionResponseFlag    bool
 	updateNotificationCounter      int
+
+	CurrentState *protobuf.State
+
 	proto.UnimplementedWalletServiceServer
 }
 
@@ -86,11 +90,8 @@ func openChannelRejected() (*proto.OpenChannelResponse, error) {
 }
 
 func (wsc *MyWalletService) UpdateNotification(ctx context.Context, in *proto.UpdateNotificationRequest) (*proto.UpdateNotificationResponse, error) {
-	if wsc.updateNotificationResponseFlag {
-		return updateNotificationAccepted()
-	} else {
-		return updateNotificationRejected()
-	}
+	wsc.CurrentState = in.State
+	return updateNotificationAccepted()
 }
 
 // SetUpdateNotificationResponse set default response for UpdateNotification. True sets wallet to accep all channel updates. False rejects all channel updates

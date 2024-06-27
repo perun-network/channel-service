@@ -25,7 +25,6 @@ func NewChannelOpenRequest(requester address.Participant, peer address.Participa
 	if err != nil {
 		return proto.ChannelOpenRequest{}, fmt.Errorf("failed to pack requester participant: %w", err)
 	}
-	//log.Printf("Requester: %v", requesterPart)
 	requesterCkbAddrInBytes := requesterPart.AsSlice()
 	peerPart, err := peer.PackOffChainParticipant()
 	if err != nil {
@@ -82,6 +81,12 @@ func NewChannelUpdateRequest(channelID gpchannel.ID, chState *gpchannel.State, a
 
 }
 
+func NewChannelCloseRequest(channelID gpchannel.ID) *proto.ChannelCloseRequest {
+	return &proto.ChannelCloseRequest{
+		ChannelId: channelID[:],
+	}
+}
+
 func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 	assets := make([]gpchannel.Asset, len(amounts))
 	i := 0
@@ -91,7 +96,6 @@ func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 	}
 	// We create an initial allocation which defines the starting balances.
 	initAlloc := gpchannel.NewAllocation(2, assets...)
-	log.Println(initAlloc.Assets)
 	for a, amount := range amounts {
 		switch a := a.(type) {
 		case *ckbasset.Asset:
@@ -112,7 +116,6 @@ func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 		}
 
 	}
-	log.Println("Created Allocation")
 	return initAlloc
 }
 

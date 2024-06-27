@@ -112,7 +112,7 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 	// TODO: Do we need to do anything here?
 	// TODO: Inform wallet service server about event.
-	log.Printf("Adjudicator event: type = %T", event)
+	log.Printf("Adjudicator event: type = %T\n", event)
 }
 
 // NewUser creates a new user with the specified participant, wire address, bus, funder, adjudicator, wallet, watcher, wallet service client and persistence.
@@ -274,7 +274,6 @@ func (u *User) GetChannels() []channel.State {
 
 // NotifyAllState notifies the wallet service about the new state of the channel.
 func (u *User) NotifyAllState(_, to *channel.State) {
-	log.Print("Notifying wallet service about state update")
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
 		panic(fmt.Sprintf("unable to encode state: %v", err))

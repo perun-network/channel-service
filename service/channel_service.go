@@ -12,7 +12,6 @@ import (
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"github.com/perun-network/perun-libp2p-wire/p2p"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
@@ -38,7 +37,6 @@ const (
 
 // ChannelService is the service for handling perun channel operations.
 type ChannelService struct {
-	name       string
 	user       *User
 	wsc        proto.WalletServiceClient
 	net        *p2p.Net
@@ -55,7 +53,7 @@ type ChannelService struct {
 }
 
 // NewChannelService creates a new ChannelService.
-func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeURL string, deployment backend.Deployment, res AddressResolver, db sortedkv.Database, name string) (*ChannelService, error) {
+func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeURL string, deployment backend.Deployment, res AddressResolver, db sortedkv.Database) (*ChannelService, error) {
 	node, err := rpc.Dial(nodeURL)
 	if err != nil {
 		return nil, err
@@ -101,6 +99,20 @@ func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeU
 
 	pr := keyvalue.NewPersistRestorer(db)
 
+	ps, err := pr.ActivePeers(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("error getting active peers: %w", err)
+	}
+
+	for _, p := range ps {
+		// Register peers' LIBP2P address from persistence.
+		peerAddr, ok := p.(*p2p.Address)
+		if !ok {
+			return nil, errors.New("peer address is not a libp2p address")
+		}
+		wireNet.Dialer.Register(p, peerAddr.String())
+	}
+
 	cs := &ChannelService{
 		wsc:        c,
 		net:        wireNet,
@@ -111,7 +123,6 @@ func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeU
 		wireAddr:   wireAcc.Address(),
 		resolver:   res,
 		pr:         pr,
-		name:       name,
 	}
 
 	return cs, nil
@@ -144,7 +155,6 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 
 	challengeDuration := c.GetChallengeDurationFromChannelOpenRequest(request)
 	log.Printf("about to open channel with peer")
-	//log.Printf("Opening channel with peer %s", request.GetPeer())
 	id, err := user.OpenChannel(ctx, peer, allocation, challengeDuration)
 	log.Println("Opening request returned")
 	if err != nil {
@@ -200,24 +210,18 @@ func (c ChannelService) CloseChannel(ctx context.Context, request *proto.Channel
 // GetChannels returns the channels for the user.
 func (c ChannelService) GetChannels(ctx context.Context, request *proto.GetChannelsRequest) (*proto.GetChannelsResponse, error) {
 	u, err := c.getUserFromGetChannelsRequest(request)
-	//log.Println("GetChannels request received")
 	if err != nil {
-		//	log.Println("unable to find user for get channels request")
 		return nil, err
 	}
-	//log.Printf("User found for get channels request: %v\n", u)
 	states := u.GetChannels()
 	if len(states) == 0 {
-		//	log.Println("No channels found for user")
 		return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_Rejected{Rejected: &proto.Rejected{Reason: "no channels exists for user"}}}, nil
 	}
 	state := states[0]
 	pState, err := protobuf.FromState(&state)
 	if err != nil {
-		//	log.Println("unable to convert state to protobuf")
 		return nil, err
 	}
-	//log.Printf("Returning state: %v\n", pState)
 	return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_State{State: pState}}, nil
 }
 
@@ -397,14 +401,14 @@ func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address 
 }
 
 // ClosePerunClient closes the Perun client for the user.
-func (c ChannelService) ClosePerunClient(ctx context.Context, empty *emptypb.Empty) (*emptypb.Empty, error) {
+func (c ChannelService) ClosePerunClient(ctx context.Context, req *proto.ClosePerunClientRequest) (*proto.ClosePerunClientResponse, error) {
 	err := c.user.PerunClient.Close()
 	if err != nil {
 		log.Fatalf("Error closing perun client: %v", err)
 		return nil, err
 	}
 	c.user.Channels = nil
-	return &emptypb.Empty{}, nil
+	return &proto.ClosePerunClientResponse{}, nil
 }
 
 // NewPerunClient creates a new Perun client for the user.
@@ -433,7 +437,7 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 }
 
 // RestoreChannels restores the channels for the user.
-func (c ChannelService) RestoreChannels(ctx context.Context, request *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
+func (c ChannelService) RestoreChannels(ctx context.Context, _ *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
 	c.user.RestoreChannels(ctx)
 	return &proto.RestoreChannelsResponse{Accepted: true}, nil
 }

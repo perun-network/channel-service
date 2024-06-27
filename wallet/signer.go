@@ -34,7 +34,6 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 	if err != nil {
 		return nil, err
 	}
-	//log.Printf("Signing transaction: %x\n", txBytes)
 	req := &proto.SignTransactionRequest{
 		Identifier:  scriptBytes, // TODO: Maybe encode network also?
 		Transaction: txBytes,
@@ -49,7 +48,6 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 
 	var signedTx types.Transaction
 	signedTxBytes := resp.GetTransaction()
-	//log.Printf("Signed transaction: %s\n", string(signedTxBytes))
 	if err = json.Unmarshal(signedTxBytes, &signedTx); err != nil {
 		return nil, err
 	}

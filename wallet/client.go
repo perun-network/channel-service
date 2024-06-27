@@ -3,7 +3,6 @@ package wallet
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
@@ -33,7 +32,6 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 		return nil, fmt.Errorf("signing data: %s", rejErr.Reason)
 	}
 	// We assume that the wallet returns a PaddedSignature (see perun-ckb-backend/wallet/signature.go).
-	log.Println("Signed message:", smr.GetSignature())
 	return smr.GetSignature(), nil
 }
 

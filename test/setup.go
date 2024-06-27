@@ -54,6 +54,7 @@ type Setup struct {
 	WalletServices             []*test.MyWalletService
 	ChannelServiceClients      []proto.ChannelServiceClient
 	ChannelServiceCleanupFuncs []func()
+	Database                   []sortedkv.Database
 }
 
 // NewTestSetup creates a new setup for testing.
@@ -91,14 +92,12 @@ func NewTestSetup(t *testing.T) *Setup {
 	setup.WscCleanupFuncs = []func(){aliceWSCCleanup, bobWSCCleanup}
 	setup.WalletServiceClients = []proto.WalletServiceClient{aliceWSC, bobWSC}
 
-	// AddressRessolver
-	ar := service.NewMutexLocalAddressResolver()
-
 	aliceDB := memorydb.NewDatabase()
 	bobDB := memorydb.NewDatabase()
+	setup.Database = []sortedkv.Database{aliceDB, bobDB}
 
-	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, Network, rpcNodeURL, d, ar, aliceDB)
-	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, Network, rpcNodeURL, d, ar, bobDB)
+	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, Network, rpcNodeURL, d, nil, aliceDB)
+	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, Network, rpcNodeURL, d, nil, bobDB)
 	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
 	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
 	log.Printf("Participants: %v", parts)
@@ -167,6 +166,26 @@ func (set *Setup) setupWalletService(t *testing.T, name string, ctx context.Cont
 			log.Printf("error closing listener: %v", err)
 		}
 		baseServer.Stop()
+	}
+}
+
+func (setup *Setup) RestartChannelServices(t *testing.T) {
+
+	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", setup.WalletServiceClients[0], Network, rpcNodeURL, setup.Deployment, nil, setup.Database[0])
+	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", setup.WalletServiceClients[1], Network, rpcNodeURL, setup.Deployment, nil, setup.Database[1])
+
+	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
+	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
+
+	// Initialize Users
+	var err error
+	for i, part := range setup.Participants {
+		if i == 0 {
+			_, err = aliceCS.InitializeUser(part, setup.WalletServiceClients[0], external.NewWallet(chwallet.NewExternalClient(setup.WalletServiceClients[0])))
+		} else {
+			_, err = bobCS.InitializeUser(part, setup.WalletServiceClients[1], external.NewWallet(chwallet.NewExternalClient(setup.WalletServiceClients[1])))
+		}
+		require.NoError(t, err, "error initializing user %d", i)
 	}
 }
 
