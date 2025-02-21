@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
+	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 )
 
@@ -21,12 +23,14 @@ func NewRemoteSigner(wcs proto.WalletServiceClient, addr address.Address) *Remot
 	}
 }
 
-func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*transaction.TransactionWithScriptGroups, error) {
+func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*types.Transaction, error) {
 	scriptBytes, err := json.Marshal(s.addr.Script)
 	if err != nil {
 		return nil, err
 	}
+
 	txBytes, err := json.Marshal(tx)
+
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +46,7 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 		return nil, fmt.Errorf("transaction signing failed: %s", rej.Reason)
 	}
 
-	var signedTx transaction.TransactionWithScriptGroups
+	var signedTx types.Transaction
 	signedTxBytes := resp.GetTransaction()
 	if err = json.Unmarshal(signedTxBytes, &signedTx); err != nil {
 		return nil, err
