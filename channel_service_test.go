@@ -131,6 +131,14 @@ func runRestoreChannels(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, closeAcp.Close.ChannelId, acp.ChannelId)
 
+	// Close perun clients
+	log.Println("Closing Alice's client")
+	_, err = aliceChannelServiceClient.ClosePerunClient(context.TODO(), &proto.ClosePerunClientRequest{})
+	require.NoError(t, err)
+	log.Println("Closing bob's client")
+	_, err = bobChannelServiceClient.ClosePerunClient(context.TODO(), &proto.ClosePerunClientRequest{})
+	require.NoError(t, err)
+
 	log.Println("Test run sucessfully")
 	setup.ChannelServiceCleanupFuncs[0]()
 	setup.ChannelServiceCleanupFuncs[1]()
