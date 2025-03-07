@@ -54,7 +54,7 @@ type Setup struct {
 	WalletServices             []*test.MyWalletService
 	ChannelServiceClients      []proto.ChannelServiceClient
 	ChannelServiceCleanupFuncs []func()
-	Database                   []sortedkv.Database
+	Database                   []*sortedkv.Database
 }
 
 // NewTestSetup creates a new setup for testing.
@@ -94,10 +94,10 @@ func NewTestSetup(t *testing.T) *Setup {
 
 	aliceDB := memorydb.NewDatabase()
 	bobDB := memorydb.NewDatabase()
-	setup.Database = []sortedkv.Database{aliceDB, bobDB}
+	setup.Database = []*sortedkv.Database{&aliceDB, &bobDB}
 
-	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, Network, rpcNodeURL, d, nil, aliceDB)
-	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, Network, rpcNodeURL, d, nil, bobDB)
+	aliceCSClient, aliceCS, aliceCSCleanup := setupChannelService(t, "alice", aliceWSC, Network, rpcNodeURL, d, nil, &aliceDB)
+	bobCSClient, bobCS, bobCSCleanup := setupChannelService(t, "bob", bobWSC, Network, rpcNodeURL, d, nil, &bobDB)
 	setup.ChannelServiceClients = []proto.ChannelServiceClient{aliceCSClient, bobCSClient}
 	setup.ChannelServiceCleanupFuncs = []func(){aliceCSCleanup, bobCSCleanup}
 	log.Printf("Participants: %v", parts)
@@ -119,8 +119,8 @@ func NewTestSetup(t *testing.T) *Setup {
 	return setup
 }
 
-func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, network types.Network, rpcNodeUrl string, d backend.Deployment, addrResolver service.AddressResolver, db sortedkv.Database) (proto.ChannelServiceClient, *service.ChannelService, func()) {
-	cs, err := service.NewChannelService(wsc, network, rpcNodeUrl, d, nil, db)
+func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClient, network types.Network, rpcNodeUrl string, d backend.Deployment, addrResolver service.AddressResolver, db *sortedkv.Database) (proto.ChannelServiceClient, *service.ChannelService, func()) {
+	cs, err := service.NewChannelService(wsc, network, rpcNodeUrl, d, nil, *db)
 	require.NoError(t, err, "error setting up channel service for %s", name)
 	lis := bufconn.Listen(bufSize)
 	baseServer := grpc.NewServer()
@@ -137,7 +137,11 @@ func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClien
 	require.NoError(t, err, "Failed to dial bufnet for %s", name)
 
 	return proto.NewChannelServiceClient(conn), cs, func() {
-		err := lis.Close()
+		err := cs.Close()
+		if err != nil {
+			log.Printf("error closing channel service: %v", err)
+		}
+		err = lis.Close()
 		if err != nil {
 			log.Printf("error closing listener: %v", err)
 		}
