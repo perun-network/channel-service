@@ -1,0 +1,8 @@
+Password: Repeat password: address:
+  mainnet: ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq2fg0kgq3n3fecafq2whvl9s4mh7lannaqerqdgu
+  testnet: ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq2fg0kgq3n3fecafq2whvl9s4mh7lannaqh3tzzy
+address(deprecated):
+  mainnet: ckb1qyqyjslvspr8znn36jq5awe7tpth0alm886qaujzhj
+  testnet: ckt1qyqyjslvspr8znn36jq5awe7tpth0alm886qqevamw
+lock_arg: 0x4943ec8046714e71d4814ebb3e585777f7fb39f4
+lock_hash: 0x15e9612b88fc6b50b077feedfdf2fe88010bb9c70ce5e42858e529ce7ae70fb6
