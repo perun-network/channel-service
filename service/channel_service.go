@@ -402,7 +402,14 @@ func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address 
 
 // ClosePerunClient closes the Perun client for the user.
 func (c ChannelService) ClosePerunClient(ctx context.Context, req *proto.ClosePerunClientRequest) (*proto.ClosePerunClientResponse, error) {
-	err := c.user.PerunClient.Close()
+	// Delete the wire
+	err := c.resolver.DeleteWire(&c.user.Participant)
+	if err != nil {
+		log.Fatalf("Error deleting wire: %v", err)
+		return nil, err
+	}
+
+	err = c.user.PerunClient.Close()
 	if err != nil {
 		log.Fatalf("Error closing perun client: %v", err)
 		return nil, err
@@ -440,4 +447,8 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 func (c ChannelService) RestoreChannels(ctx context.Context, _ *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
 	c.user.RestoreChannels(ctx)
 	return &proto.RestoreChannelsResponse{Accepted: true}, nil
+}
+
+func (c ChannelService) Close() error {
+	return c.net.Bus.Close()
 }
