@@ -138,5 +138,3 @@ require (
 )
 
 replace github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0 => github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20240618093616-6d9d92aa863d
-
-//replace perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166 => /home/mek/code/perun-ckb-backend
