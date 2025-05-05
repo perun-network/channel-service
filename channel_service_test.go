@@ -42,8 +42,10 @@ func runRestoreChannels(t *testing.T) {
 	bobWalletService.SetSignTransactionResponse(true)
 
 	ckbAsset := setup.Asset
+	sudtAsset := setup.SudtAsset
 	assetsmap := map[channel.Asset]float64{
-		&ckbAsset: 200.0,
+		&ckbAsset:  100.0,
+		&sudtAsset: 1.0,
 	}
 
 	// Open channel.
@@ -77,6 +79,7 @@ func runRestoreChannels(t *testing.T) {
 	require.NoError(t, err)
 	log.Println("Restarting Bob's client")
 	_, err = bobChannelServiceClient.NewPerunClient(context.TODO(), test.NewPerunClientRequest())
+	require.NoError(t, err)
 
 	// Restore channels
 	log.Println("Restoring channels for Alice")
@@ -93,7 +96,8 @@ func runRestoreChannels(t *testing.T) {
 	require.NotNil(t, updateState)
 
 	ammounts := map[channel.Asset]float64{
-		&ckbAsset: 20.0,
+		&ckbAsset:  20.0,
+		&sudtAsset: 10.0,
 	}
 
 	aliceChannelUpdateRequest, err := test.NewChannelUpdateRequest([32]byte(acp.ChannelId), updateState, ammounts, 0)

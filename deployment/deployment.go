@@ -137,10 +137,10 @@ func GetDeployment(migrationDir, systemScriptsDir, sudtOwnerLockArg string) (bac
 	}
 	migrationName := dir[0].Name()
 	migrationFile, err := os.Open(path.Join(migrationDir, migrationName))
-	defer migrationFile.Close()
 	if err != nil {
 		return backend.Deployment{}, SUDTInfo{}, err
 	}
+	defer migrationFile.Close()
 	migrationData, err := io.ReadAll(migrationFile)
 	if err != nil {
 		return backend.Deployment{}, SUDTInfo{}, err
