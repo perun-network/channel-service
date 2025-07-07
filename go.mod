@@ -9,8 +9,8 @@ require (
 	github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0
 	github.com/perun-network/perun-libp2p-wire v0.2.2
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/grpc v1.73.0
+	google.golang.org/protobuf v1.36.6
 	perun.network/go-perun v0.12.0
 	perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
@@ -38,7 +38,6 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20250208200701-d0013a598941 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -132,7 +131,7 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.0 // indirect
 )

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	chanserv "perun.network/channel-service/service"
 	"perun.network/channel-service/test"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/wire/protobuf"
@@ -19,6 +20,140 @@ func TestRestoreChannels(t *testing.T) {
 	t.Run("payment-channels on ckb example", func(t *testing.T) {
 		runRestoreChannels(t)
 	})
+}
+
+func TestGetChannels(t *testing.T) {
+	setup := test.NewTestSetup(t)
+	defer setup.WscCleanupFuncs[0]()
+	defer setup.WscCleanupFuncs[1]()
+
+	aliceChannelServiceClient := setup.ChannelServiceClients[0]
+	bobChannelServiceClient := setup.ChannelServiceClients[1]
+
+	// Bob and alice accept all incoming changes.
+	aliceWalletService := setup.WalletServices[0]
+	bobWalletService := setup.WalletServices[1]
+
+	aliceWalletService.SetOpenChannelResponse(true)
+	aliceWalletService.SetSignMessageResponse(true)
+	aliceWalletService.SetSignTransactionResponse(true)
+
+	bobWalletService.SetOpenChannelResponse(true)
+	bobWalletService.SetSignMessageResponse(true)
+	bobWalletService.SetSignTransactionResponse(true)
+
+	ckbAsset := setup.Asset
+	assetsmap := map[channel.Asset]float64{
+		&ckbAsset: 100.0,
+	}
+
+	// Alice opens channel Open channel.
+	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
+	require.NoError(t, err)
+
+	openChannelResp, err := aliceChannelServiceClient.OpenChannel(context.Background(), &aliceChannelOpenRequest)
+	log.Println("Channel Opened")
+	require.NoError(t, err)
+	require.NotNil(t, openChannelResp)
+
+	acp, ok := openChannelResp.Msg.(*proto.ChannelOpenResponse_ChannelId)
+	require.True(t, ok)
+	require.NotNil(t, acp)
+	firstChannelID := acp.ChannelId
+
+	// Wait for channel to be funded.
+	log.Println("Waiting for channel to be funded")
+	time.Sleep(5 * time.Second)
+
+	// Bob opens another channel
+	bobChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[1], setup.Participants[0], assetsmap)
+	require.NoError(t, err)
+	openChannelResp, err = bobChannelServiceClient.OpenChannel(context.Background(), &bobChannelOpenRequest)
+	log.Println("Channel Opened by Bob")
+	require.NoError(t, err)
+	require.NotNil(t, openChannelResp)
+	bcp, ok := openChannelResp.Msg.(*proto.ChannelOpenResponse_ChannelId)
+	require.True(t, ok)
+	require.NotNil(t, bcp)
+	secondChannelID := bcp.ChannelId
+	// Wait for channel to be funded.
+	log.Println("Waiting for channel to be funded by Bob")
+	time.Sleep(5 * time.Second)
+
+	// Prep for getChannels request
+	aliceParticipant := setup.Participants[0]
+	bobParticipant := setup.Participants[1]
+	aliceParticipantBytes, err := aliceParticipant.MarshalBinary()
+	require.NoError(t, err)
+	bobParticipantBytes, err := bobParticipant.MarshalBinary()
+	require.NoError(t, err)
+	assertChannelStatesType := func(t *testing.T, resp *proto.GetChannelsResponse) *proto.ChannelStates {
+		require.NotNil(t, resp, "response should not be nil")
+		require.NotNil(t, resp.GetStates().GetStates(), "ChannelStates field should not be nil")
+		return resp.GetStates()
+	}
+	// Get channels for Alice
+	aliceGetChannelsResp, err := aliceChannelServiceClient.GetChannels(context.Background(), &proto.GetChannelsRequest{Requester: aliceParticipantBytes})
+	require.NoError(t, err)
+	assertChannelStatesType(t, aliceGetChannelsResp)
+
+	// Get channels for Bob
+	bobGetChannelsResp, err := bobChannelServiceClient.GetChannels(context.Background(), &proto.GetChannelsRequest{Requester: bobParticipantBytes})
+	require.NoError(t, err)
+	assertChannelStatesType(t, bobGetChannelsResp)
+
+	// Create a set of expected channel IDs
+	expectedChannelIDs := make(map[channel.ID]bool)
+	expectedChannelIDs[channel.ID(firstChannelID)] = true
+	expectedChannelIDs[channel.ID(secondChannelID)] = true
+
+	// Create sets for Alice's and Bob's channel IDs
+	aliceChannelIDs := make(map[channel.ID]bool)
+	bobChannelIDs := make(map[channel.ID]bool)
+
+	// Populate Alice's channel IDs
+	for _, pState := range aliceGetChannelsResp.GetStates().GetStates() {
+		aliceState, err := chanserv.AsChannelState(pState)
+		require.NoError(t, err, "Alice's channel state should be valid")
+		aliceChannelIDs[aliceState.ID] = true
+	}
+
+	// Populate Bob's channel IDs
+	for _, pState := range bobGetChannelsResp.GetStates().GetStates() {
+		bobState, err := chanserv.AsChannelState(pState)
+		require.NoError(t, err, "Bob's channel state should be valid")
+		bobChannelIDs[bobState.ID] = true
+	}
+
+	// Check if both Alice and Bob have all expected channel IDs
+	for expectedID := range expectedChannelIDs {
+		require.True(t, aliceChannelIDs[expectedID], "Alice should have channel ID %v", expectedID)
+		require.True(t, bobChannelIDs[expectedID], "Bob should have channel ID %v", expectedID)
+		log.Printf("Both Alice and Bob have channel ID %v", expectedID)
+	}
+
+	// Check if the number of channels matches the expected count
+	require.Len(t, aliceChannelIDs, len(expectedChannelIDs), "Alice should have exactly %d channels", len(expectedChannelIDs))
+	require.Len(t, bobChannelIDs, len(expectedChannelIDs), "Bob should have exactly %d channels", len(expectedChannelIDs))
+
+	log.Println("Alice and Bob have the same channels")
+	// Close the channels
+	log.Println("Closing the channel opened by Alice")
+	closeChannelResponse, err := aliceChannelServiceClient.CloseChannel(context.Background(), test.NewChannelCloseRequest([32]byte(firstChannelID)))
+	require.NoError(t, err)
+	require.NotNil(t, closeChannelResponse)
+	closeAcp, ok := closeChannelResponse.Msg.(*proto.ChannelCloseResponse_Close)
+	require.True(t, ok)
+	require.Equal(t, closeAcp.Close.ChannelId, firstChannelID)
+
+	log.Println("Closing the channel opened by Bob")
+	closeChannelResponse, err = bobChannelServiceClient.CloseChannel(context.Background(), test.NewChannelCloseRequest([32]byte(secondChannelID)))
+	require.NoError(t, err)
+	require.NotNil(t, closeChannelResponse)
+	closeBcp, ok := closeChannelResponse.Msg.(*proto.ChannelCloseResponse_Close)
+	require.True(t, ok)
+	require.Equal(t, closeBcp.Close.ChannelId, secondChannelID)
+
 }
 
 func runRestoreChannels(t *testing.T) {

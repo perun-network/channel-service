@@ -217,12 +217,18 @@ func (c ChannelService) GetChannels(ctx context.Context, request *proto.GetChann
 	if len(states) == 0 {
 		return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_Rejected{Rejected: &proto.Rejected{Reason: "no channels exists for user"}}}, nil
 	}
-	state := states[0]
-	pState, err := protobuf.FromState(&state)
-	if err != nil {
-		return nil, err
+	pStates := make([]*protobuf.State, len(states))
+	for i, state := range states {
+		pState, err := protobuf.FromState(&state)
+		if err != nil {
+			return nil, fmt.Errorf("error converting state to protobuf: %w", err)
+		}
+		pStates[i] = pState
 	}
-	return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_State{State: pState}}, nil
+	channelStates := &proto.ChannelStates{
+		States: pStates,
+	}
+	return &proto.GetChannelsResponse{Msg: &proto.GetChannelsResponse_States{States: channelStates}}, nil
 }
 
 func (c ChannelService) getUserFromGetChannelsRequest(request *proto.GetChannelsRequest) (*User, error) {
