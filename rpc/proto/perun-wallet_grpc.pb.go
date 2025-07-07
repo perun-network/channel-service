@@ -45,6 +45,7 @@ type ChannelServiceClient interface {
 	GetChannels(ctx context.Context, in *GetChannelsRequest, opts ...grpc.CallOption) (*GetChannelsResponse, error)
 	RestoreChannels(ctx context.Context, in *RestoreChannelsRequest, opts ...grpc.CallOption) (*RestoreChannelsResponse, error)
 	ClosePerunClient(ctx context.Context, in *ClosePerunClientRequest, opts ...grpc.CallOption) (*ClosePerunClientResponse, error)
+	// For testing purposes
 	NewPerunClient(ctx context.Context, in *NewPerunClientRequest, opts ...grpc.CallOption) (*NewPerunClientResponse, error)
 }
 
@@ -143,6 +144,7 @@ type ChannelServiceServer interface {
 	GetChannels(context.Context, *GetChannelsRequest) (*GetChannelsResponse, error)
 	RestoreChannels(context.Context, *RestoreChannelsRequest) (*RestoreChannelsResponse, error)
 	ClosePerunClient(context.Context, *ClosePerunClientRequest) (*ClosePerunClientResponse, error)
+	// For testing purposes
 	NewPerunClient(context.Context, *NewPerunClientRequest) (*NewPerunClientResponse, error)
 	mustEmbedUnimplementedChannelServiceServer()
 }

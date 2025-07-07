@@ -89,40 +89,46 @@ func TestGetChannels(t *testing.T) {
 	require.NoError(t, err)
 	assertChannelStatesType := func(t *testing.T, resp *proto.GetChannelsResponse) *proto.ChannelStates {
 		require.NotNil(t, resp, "response should not be nil")
-		require.NotNil(t, resp.GetStates().GetStates(), "ChannelStates field should not be nil")
-		return resp.GetStates()
+		require.NotNil(t, resp.GetChannelStates().GetStates(), "ChannelStates field should not be nil")
+		return resp.GetChannelStates()
 	}
 	// Get channels for Alice
 	aliceGetChannelsResp, err := aliceChannelServiceClient.GetChannels(context.Background(), &proto.GetChannelsRequest{Requester: aliceParticipantBytes})
 	require.NoError(t, err)
 	assertChannelStatesType(t, aliceGetChannelsResp)
+	require.Len(t, aliceGetChannelsResp.GetChannelStates().GetStates(), len(aliceGetChannelsResp.GetChannelStates().GetActorIdxs()), "Alice should have the same number of channel states and actor indexes")
 
 	// Get channels for Bob
 	bobGetChannelsResp, err := bobChannelServiceClient.GetChannels(context.Background(), &proto.GetChannelsRequest{Requester: bobParticipantBytes})
 	require.NoError(t, err)
 	assertChannelStatesType(t, bobGetChannelsResp)
+	require.Len(t, bobGetChannelsResp.GetChannelStates().GetStates(), len(bobGetChannelsResp.GetChannelStates().GetActorIdxs()), "Bob should have the same number of channel states and actor indexes")
 
 	// Create a set of expected channel IDs
-	expectedChannelIDs := make(map[channel.ID]bool)
-	expectedChannelIDs[channel.ID(firstChannelID)] = true
-	expectedChannelIDs[channel.ID(secondChannelID)] = true
+	expectedChannelIDs := make(map[channel.ID]string)
+	expectedChannelIDs[channel.ID(firstChannelID)] = "alice" // Alice proposed the first channel
+	expectedChannelIDs[channel.ID(secondChannelID)] = "bob"  // Bob proposed the second channel
 
 	// Create sets for Alice's and Bob's channel IDs
 	aliceChannelIDs := make(map[channel.ID]bool)
+	aliceActorIndexes := make(map[channel.ID]uint32)
 	bobChannelIDs := make(map[channel.ID]bool)
+	bobActorIndexes := make(map[channel.ID]uint32)
 
 	// Populate Alice's channel IDs
-	for _, pState := range aliceGetChannelsResp.GetStates().GetStates() {
+	for i, pState := range aliceGetChannelsResp.GetChannelStates().GetStates() {
 		aliceState, err := chanserv.AsChannelState(pState)
 		require.NoError(t, err, "Alice's channel state should be valid")
 		aliceChannelIDs[aliceState.ID] = true
+		aliceActorIndexes[aliceState.ID] = aliceGetChannelsResp.GetChannelStates().GetActorIdxs()[i]
 	}
 
 	// Populate Bob's channel IDs
-	for _, pState := range bobGetChannelsResp.GetStates().GetStates() {
+	for i, pState := range bobGetChannelsResp.GetChannelStates().GetStates() {
 		bobState, err := chanserv.AsChannelState(pState)
 		require.NoError(t, err, "Bob's channel state should be valid")
 		bobChannelIDs[bobState.ID] = true
+		bobActorIndexes[bobState.ID] = bobGetChannelsResp.GetChannelStates().GetActorIdxs()[i]
 	}
 
 	// Check if both Alice and Bob have all expected channel IDs
@@ -130,6 +136,21 @@ func TestGetChannels(t *testing.T) {
 		require.True(t, aliceChannelIDs[expectedID], "Alice should have channel ID %v", expectedID)
 		require.True(t, bobChannelIDs[expectedID], "Bob should have channel ID %v", expectedID)
 		log.Printf("Both Alice and Bob have channel ID %v", expectedID)
+	}
+
+	// check if actor_indexes are correct for both participants
+	for expectedID, proposer := range expectedChannelIDs {
+		aliceIdx := aliceActorIndexes[expectedID]
+		bobIdx := bobActorIndexes[expectedID]
+		if proposer == "alice" {
+			require.Equal(t, uint32(0), aliceIdx, "Alice should be the proposer for channel ID %v", expectedID)
+			require.Equal(t, uint32(1), bobIdx, "Bob should be the responder for channel ID %v", expectedID)
+		}
+		if proposer == "bob" {
+			require.Equal(t, uint32(1), aliceIdx, "Alice should be the responder for channel ID %v", expectedID)
+			require.Equal(t, uint32(0), bobIdx, "Bob should be the proposer for channel ID %v", expectedID)
+		}
+		log.Printf("Channel ID %v has correct actor indexes: Alice(%d), Bob(%d)", expectedID, aliceIdx, bobIdx)
 	}
 
 	// Check if the number of channels matches the expected count

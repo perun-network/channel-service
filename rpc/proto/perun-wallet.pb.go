@@ -357,7 +357,7 @@ func (x *Rejected) GetReason() string {
 
 type GetChannelsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The channel id of the channel to be closed.
+	// L1 address of requester (serialized offchain participant)
 	Requester     []byte `protobuf:"bytes,1,opt,name=requester,proto3" json:"requester,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -405,7 +405,7 @@ type GetChannelsResponse struct {
 	// Types that are valid to be assigned to Msg:
 	//
 	//	*GetChannelsResponse_Rejected
-	//	*GetChannelsResponse_States
+	//	*GetChannelsResponse_ChannelStates
 	Msg           isGetChannelsResponse_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -457,10 +457,10 @@ func (x *GetChannelsResponse) GetRejected() *Rejected {
 	return nil
 }
 
-func (x *GetChannelsResponse) GetStates() *ChannelStates {
+func (x *GetChannelsResponse) GetChannelStates() *ChannelStates {
 	if x != nil {
-		if x, ok := x.Msg.(*GetChannelsResponse_States); ok {
-			return x.States
+		if x, ok := x.Msg.(*GetChannelsResponse_ChannelStates); ok {
+			return x.ChannelStates
 		}
 	}
 	return nil
@@ -474,17 +474,19 @@ type GetChannelsResponse_Rejected struct {
 	Rejected *Rejected `protobuf:"bytes,1,opt,name=rejected,proto3,oneof"`
 }
 
-type GetChannelsResponse_States struct {
-	States *ChannelStates `protobuf:"bytes,2,opt,name=states,proto3,oneof"`
+type GetChannelsResponse_ChannelStates struct {
+	ChannelStates *ChannelStates `protobuf:"bytes,2,opt,name=channel_states,json=channelStates,proto3,oneof"`
 }
 
 func (*GetChannelsResponse_Rejected) isGetChannelsResponse_Msg() {}
 
-func (*GetChannelsResponse_States) isGetChannelsResponse_Msg() {}
+func (*GetChannelsResponse_ChannelStates) isGetChannelsResponse_Msg() {}
 
+// for channel with state at index i, actor is at index i
 type ChannelStates struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	States        []*protobuf.State      `protobuf:"bytes,1,rep,name=states,proto3" json:"states,omitempty"`
+	ActorIdxs     []uint32               `protobuf:"varint,2,rep,packed,name=actor_idxs,json=actorIdxs,proto3" json:"actor_idxs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -522,6 +524,13 @@ func (*ChannelStates) Descriptor() ([]byte, []int) {
 func (x *ChannelStates) GetStates() []*protobuf.State {
 	if x != nil {
 		return x.States
+	}
+	return nil
+}
+
+func (x *ChannelStates) GetActorIdxs() []uint32 {
+	if x != nil {
+		return x.ActorIdxs
 	}
 	return nil
 }
@@ -1922,13 +1931,15 @@ const file_perun_wallet_proto_rawDesc = "" +
 	"\bRejected\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"2\n" +
 	"\x12GetChannelsRequest\x12\x1c\n" +
-	"\trequester\x18\x01 \x01(\fR\trequester\"\x89\x01\n" +
+	"\trequester\x18\x01 \x01(\fR\trequester\"\x98\x01\n" +
 	"\x13GetChannelsResponse\x124\n" +
-	"\brejected\x18\x01 \x01(\v2\x16.perunservice.RejectedH\x00R\brejected\x125\n" +
-	"\x06states\x18\x02 \x01(\v2\x1b.perunservice.ChannelStatesH\x00R\x06statesB\x05\n" +
-	"\x03msg\"9\n" +
+	"\brejected\x18\x01 \x01(\v2\x16.perunservice.RejectedH\x00R\brejected\x12D\n" +
+	"\x0echannel_states\x18\x02 \x01(\v2\x1b.perunservice.ChannelStatesH\x00R\rchannelStatesB\x05\n" +
+	"\x03msg\"X\n" +
 	"\rChannelStates\x12(\n" +
-	"\x06states\x18\x01 \x03(\v2\x10.perunwire.StateR\x06states\"\xac\x01\n" +
+	"\x06states\x18\x01 \x03(\v2\x10.perunwire.StateR\x06states\x12\x1d\n" +
+	"\n" +
+	"actor_idxs\x18\x02 \x03(\rR\tactorIdxs\"\xac\x01\n" +
 	"\x12ChannelOpenRequest\x12\x1c\n" +
 	"\trequester\x18\x01 \x01(\fR\trequester\x12\x12\n" +
 	"\x04peer\x18\x02 \x01(\fR\x04peer\x125\n" +
@@ -2079,7 +2090,7 @@ var file_perun_wallet_proto_goTypes = []any{
 }
 var file_perun_wallet_proto_depIdxs = []int32{
 	6,  // 0: perunservice.GetChannelsResponse.rejected:type_name -> perunservice.Rejected
-	9,  // 1: perunservice.GetChannelsResponse.states:type_name -> perunservice.ChannelStates
+	9,  // 1: perunservice.GetChannelsResponse.channel_states:type_name -> perunservice.ChannelStates
 	33, // 2: perunservice.ChannelStates.states:type_name -> perunwire.State
 	34, // 3: perunservice.ChannelOpenRequest.allocation:type_name -> perunwire.Allocation
 	6,  // 4: perunservice.ChannelOpenResponse.rejected:type_name -> perunservice.Rejected
@@ -2137,7 +2148,7 @@ func file_perun_wallet_proto_init() {
 	}
 	file_perun_wallet_proto_msgTypes[8].OneofWrappers = []any{
 		(*GetChannelsResponse_Rejected)(nil),
-		(*GetChannelsResponse_States)(nil),
+		(*GetChannelsResponse_ChannelStates)(nil),
 	}
 	file_perun_wallet_proto_msgTypes[11].OneofWrappers = []any{
 		(*ChannelOpenResponse_Rejected)(nil),
