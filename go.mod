@@ -12,7 +12,7 @@ require (
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 	perun.network/go-perun v0.12.1-0.20250415090022-4d68d2869b94
-	perun.network/perun-ckb-backend v0.0.0-20250813142332-80336366ebb5
+	perun.network/perun-ckb-backend v0.0.0-20250813171149-24901659357c
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
 )
 
@@ -137,5 +137,3 @@ require (
 )
 
 replace github.com/nervosnetwork/ckb-sdk-go/v2 v2.2.0 => github.com/perun-network/ckb-sdk-go/v2 v2.2.1-0.20240618093616-6d9d92aa863d
-
-// replace perun.network/perun-ckb-backend => /home/mekjarov/code/cs-project-temp-channe-id/ckb-baNOckend2

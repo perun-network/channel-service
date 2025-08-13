@@ -2,12 +2,11 @@ package wallet
 
 import (
 	"context"
-	"encoding/binary"
-	"errors"
 	"fmt"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
+	bchannel "perun.network/perun-ckb-backend/channel"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
@@ -25,15 +24,8 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 	if err != nil {
 		panic(fmt.Sprintf("encoding participant addr: %v", err))
 	}
-	if len(data) < 4 {
-		return nil, fmt.Errorf("length of data to be signed is less than 4 bytes: %d", len(data))
-	}
-	tempIDLength := binary.BigEndian.Uint32(data[:4])
-	if tempIDLength != 32 {
-		return nil, errors.New("invalid TempChannelID length, must be 32 bytes")
-	}
-	tempIDBinary := data[4 : 4+tempIDLength]
-	data1 := data[4+tempIDLength:]
+	tempIDBinary := data[0:bchannel.TempChannelIDLength]
+	data1 := data[bchannel.TempChannelIDLength:]
 	sm := &proto.SignMessageRequest{Pubkey: []byte(addr), Data: data1, TempChannelID: tempIDBinary}
 	smr, err := e.c.SignMessage(context.TODO(), sm)
 	if err != nil {

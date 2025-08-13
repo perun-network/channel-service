@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,7 +70,7 @@ func (wsc *MyWalletService) openChannelAccepted(state *proto.OpenChannelRequest)
 	if err != nil {
 		log.Println("Error unmarshalling TempChannelID from proposal data", err)
 	}
-	if len(tempID) != 32 {
+	if len(tempID) != bchannel.TempChannelIDLength {
 		return nil, errors.New("invalid TempChannelID length, must be 32 bytes")
 	}
 	// wsc.TempChannelID = tempID
@@ -153,9 +154,10 @@ func (wsc *MyWalletService) signMessageAccepted(data *proto.SignMessageRequest) 
 		log.Println("Error converting data to TempChannelID", err)
 		return nil, err
 	}
-	log.Println("TempChannelID in request:", tempID.String(), "for user", wsc.name)
+	log.Println("TempChannelID in request:", tempID, "for user", wsc.name)
 	log.Println("TempChannelID in wallet service:", wsc.TempChannelIDMap[tempID.String()], "for user", wsc.name)
-	if wsc.TempChannelIDMap[tempID.String()] != tempID {
+	storedTempID := wsc.TempChannelIDMap[tempID.String()]
+	if !bytes.Equal(storedTempID[:], tempID[:]) {
 		return nil, errors.New("TempChannelID in request does not match the one stored in wallet service")
 	}
 	data1 := data.GetData()
