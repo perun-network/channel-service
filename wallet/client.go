@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
@@ -34,10 +33,6 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 		return nil, errors.New("invalid TempChannelID length, must be 32 bytes")
 	}
 	tempIDBinary := data[4 : 4+tempIDLength]
-	if err != nil {
-		log.Println("Error converting data to TempChannelID", err)
-		return nil, err
-	}
 	data1 := data[4+tempIDLength:]
 	sm := &proto.SignMessageRequest{Pubkey: []byte(addr), Data: data1, TempChannelID: tempIDBinary}
 	smr, err := e.c.SignMessage(context.TODO(), sm)
