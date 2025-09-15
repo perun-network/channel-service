@@ -455,7 +455,10 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 
 // RestoreChannels restores the channels for the user.
 func (c ChannelService) RestoreChannels(ctx context.Context, _ *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
-	c.user.RestoreChannels(ctx)
+	err := c.user.RestoreChannels(ctx)
+	if err != nil {
+		return &proto.RestoreChannelsResponse{Accepted: false}, err
+	}
 	return &proto.RestoreChannelsResponse{Accepted: true}, nil
 }
 
