@@ -4,23 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
-	"github.com/nervosnetwork/ckb-sdk-go/v2/address"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	addr2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
+	"perun.network/perun-ckb-backend/wallet/address"
 )
 
 type RemoteSigner struct {
-	wcs  proto.WalletServiceClient
-	addr address.Address
+	wcs         proto.WalletServiceClient
+	addr        addr2.Address
+	participant *address.Participant
 }
 
-func NewRemoteSigner(wcs proto.WalletServiceClient, addr address.Address) *RemoteSigner {
+func NewRemoteSigner(wcs proto.WalletServiceClient, addr addr2.Address, part *address.Participant) *RemoteSigner {
 	return &RemoteSigner{
-		wcs:  wcs,
-		addr: addr,
+		wcs:         wcs,
+		addr:        addr,
+		participant: part,
 	}
+}
+
+func (s *RemoteSigner) PublicKey() *secp256k1.PublicKey {
+	if s.participant == nil {
+		log.Panic("RemoteSigner participant is nil")
+	}
+	return s.participant.PubKey
 }
 
 func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroups) (*types.Transaction, error) {
@@ -54,6 +66,6 @@ func (s RemoteSigner) SignTransaction(tx *transaction.TransactionWithScriptGroup
 	return &signedTx, nil
 }
 
-func (s RemoteSigner) Address() address.Address {
+func (s RemoteSigner) Address() addr2.Address {
 	return s.addr
 }

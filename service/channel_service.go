@@ -322,7 +322,7 @@ func (c *ChannelService) InitializeUser(participant address.Participant, wsc pro
 	if err != nil {
 		return nil, err
 	}
-	rs := wallet.NewRemoteSigner(wsc, c.ToCKBAddress(participant))
+	rs := wallet.NewRemoteSigner(wsc, c.ToCKBAddress(participant), &participant)
 	ckbClient, err := client.NewClient(c.node, rs, c.deployment)
 	if err != nil {
 		return nil, err
@@ -436,7 +436,7 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 		return &proto.NewPerunClientResponse{Accepted: false}, errors.New("user not found")
 	}
 	wAddr := c.wireAddr
-	rs := wallet.NewRemoteSigner(c.wsc, c.ToCKBAddress(addr))
+	rs := wallet.NewRemoteSigner(c.wsc, c.ToCKBAddress(addr), &addr)
 	ckbClient, err := client.NewClient(c.node, rs, c.deployment)
 	if err != nil {
 		log.Fatalf("Error creating client: %v", err)
