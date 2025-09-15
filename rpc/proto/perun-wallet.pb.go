@@ -545,10 +545,8 @@ type ChannelOpenRequest struct {
 	Allocation *protobuf.Allocation `protobuf:"bytes,3,opt,name=allocation,proto3" json:"allocation,omitempty"`
 	// The duration of the challenge period.
 	ChallengeDuration uint64 `protobuf:"varint,4,opt,name=challenge_duration,json=challengeDuration,proto3" json:"challenge_duration,omitempty"`
-	// Temporary channel ID to be used for the channel opening.
-	TempChannelID []byte `protobuf:"bytes,5,opt,name=tempChannelID,proto3" json:"tempChannelID,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ChannelOpenRequest) Reset() {
@@ -607,13 +605,6 @@ func (x *ChannelOpenRequest) GetChallengeDuration() uint64 {
 		return x.ChallengeDuration
 	}
 	return 0
-}
-
-func (x *ChannelOpenRequest) GetTempChannelID() []byte {
-	if x != nil {
-		return x.TempChannelID
-	}
-	return nil
 }
 
 type ChannelOpenResponse struct {
@@ -1439,9 +1430,7 @@ type SignMessageRequest struct {
 	// The public key expected to sign the given message.
 	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
 	// The message to be signed.
-	Data []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	// temporary channel ID to identify the peer
-	TempChannelID []byte `protobuf:"bytes,3,opt,name=tempChannelID,proto3" json:"tempChannelID,omitempty"`
+	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1486,13 +1475,6 @@ func (x *SignMessageRequest) GetPubkey() []byte {
 func (x *SignMessageRequest) GetData() []byte {
 	if x != nil {
 		return x.Data
-	}
-	return nil
-}
-
-func (x *SignMessageRequest) GetTempChannelID() []byte {
-	if x != nil {
-		return x.TempChannelID
 	}
 	return nil
 }
@@ -1957,15 +1939,14 @@ const file_perun_wallet_proto_rawDesc = "" +
 	"\rChannelStates\x12(\n" +
 	"\x06states\x18\x01 \x03(\v2\x10.perunwire.StateR\x06states\x12\x1d\n" +
 	"\n" +
-	"actor_idxs\x18\x02 \x03(\rR\tactorIdxs\"\xd2\x01\n" +
+	"actor_idxs\x18\x02 \x03(\rR\tactorIdxs\"\xac\x01\n" +
 	"\x12ChannelOpenRequest\x12\x1c\n" +
 	"\trequester\x18\x01 \x01(\fR\trequester\x12\x12\n" +
 	"\x04peer\x18\x02 \x01(\fR\x04peer\x125\n" +
 	"\n" +
 	"allocation\x18\x03 \x01(\v2\x15.perunwire.AllocationR\n" +
 	"allocation\x12-\n" +
-	"\x12challenge_duration\x18\x04 \x01(\x04R\x11challengeDuration\x12$\n" +
-	"\rtempChannelID\x18\x05 \x01(\fR\rtempChannelID\"s\n" +
+	"\x12challenge_duration\x18\x04 \x01(\x04R\x11challengeDuration\"s\n" +
 	"\x13ChannelOpenResponse\x124\n" +
 	"\brejected\x18\x01 \x01(\v2\x16.perunservice.RejectedH\x00R\brejected\x12\x1f\n" +
 	"\n" +
@@ -2013,11 +1994,10 @@ const file_perun_wallet_proto_rawDesc = "" +
 	"\x19UpdateNotificationRequest\x12&\n" +
 	"\x05state\x18\x01 \x01(\v2\x10.perunwire.StateR\x05state\"8\n" +
 	"\x1aUpdateNotificationResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"f\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"@\n" +
 	"\x12SignMessageRequest\x12\x16\n" +
 	"\x06pubkey\x18\x01 \x01(\fR\x06pubkey\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\x12$\n" +
-	"\rtempChannelID\x18\x03 \x01(\fR\rtempChannelID\"r\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"r\n" +
 	"\x13SignMessageResponse\x124\n" +
 	"\brejected\x18\x01 \x01(\v2\x16.perunservice.RejectedH\x00R\brejected\x12\x1e\n" +
 	"\tsignature\x18\x02 \x01(\fH\x00R\tsignatureB\x05\n" +

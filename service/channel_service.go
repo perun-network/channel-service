@@ -22,7 +22,6 @@ import (
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
 	"perun.network/perun-ckb-backend/backend"
-	bchannel "perun.network/perun-ckb-backend/channel"
 	"perun.network/perun-ckb-backend/channel/adjudicator"
 	"perun.network/perun-ckb-backend/channel/asset"
 	"perun.network/perun-ckb-backend/channel/funder"
@@ -51,10 +50,6 @@ type ChannelService struct {
 	pr       persistence.PersistRestorer
 
 	proto.UnimplementedChannelServiceServer // always embed
-}
-
-func (c *ChannelService) GetUser() *User {
-	return c.user
 }
 
 // NewChannelService creates a new ChannelService.
@@ -146,30 +141,21 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 		return nil, err
 	}
 	log.Printf("Allocation received: %v", allocation.Balances)
-	peerWireAddr, peerWalletAddr, err := c.GetPeerAddressFromChannelOpenRequest(request)
+	peer, err := c.GetPeerAddressFromChannelOpenRequest(request)
 	if err != nil {
 		return nil, err
 	}
-	tempID := request.GetTempChannelID()
-	var tempChannelID bchannel.TempChannelID
-	if tempID != nil {
-		tempChannelID, err = bchannel.NewTempChannelIDFromBytes(tempID)
-		if err != nil {
-			return nil, fmt.Errorf("error creating TempChannelID from bytes: %w", err)
-		}
-		log.Println("Unmarshalled temp channel ID:", tempChannelID)
 
-	}
 	// Register peer LIBP2P address
-	peerLibp2pAddr, ok := peerWireAddr.(*p2p.Address)
+	peerLibp2pAddr, ok := peer.(*p2p.Address)
 	if !ok {
 		return nil, fmt.Errorf("peer address is not a libp2p address")
 	}
-	c.net.Dialer.Register(peerWireAddr, peerLibp2pAddr.String())
+	c.net.Dialer.Register(peer, peerLibp2pAddr.String())
 
 	challengeDuration := c.GetChallengeDurationFromChannelOpenRequest(request)
 	log.Printf("about to open channel with peer")
-	id, err := user.OpenChannel(ctx, peerWireAddr, peerWalletAddr, allocation, challengeDuration, &tempChannelID)
+	id, err := user.OpenChannel(ctx, peer, allocation, challengeDuration)
 	log.Println("Opening request returned")
 	if err != nil {
 		return &proto.ChannelOpenResponse{Msg: &proto.ChannelOpenResponse_Rejected{Rejected: &proto.Rejected{Reason: err.Error()}}}, err
@@ -394,23 +380,20 @@ func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, erro
 }
 
 // GetPeerAddressFromChannelOpenRequest returns the peer address from the channel open request.
-func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) (wire.Address, address.Participant, error) {
+func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) (wire.Address, error) {
 	// NOTE: The peer address should probably be a string-encoded CKB Address (see MakeDefaultWireAddress).
 	peer := request.GetPeer()
 	if peer == nil {
-		return nil, address.Participant{}, fmt.Errorf("missing requester in ChannelOpenRequest")
+		return nil, fmt.Errorf("missing requester in ChannelOpenRequest")
 	}
 
 	var addr address.Participant
 	err := addr.UnmarshalBinary(peer)
 	if err != nil {
-		return nil, address.Participant{}, err
+		return nil, err
 	}
-	peerWireAddr, err := c.resolver.GetWireAddress(&addr)
-	if err != nil {
-		return nil, address.Participant{}, fmt.Errorf("error getting wire address for peer %s: %w", addr, err)
-	}
-	return peerWireAddr, addr, nil
+
+	return c.resolver.GetWireAddress(&addr)
 }
 
 func (c ChannelService) GetChallengeDurationFromChannelOpenRequest(request *proto.ChannelOpenRequest) uint64 {
@@ -472,10 +455,7 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 
 // RestoreChannels restores the channels for the user.
 func (c ChannelService) RestoreChannels(ctx context.Context, _ *proto.RestoreChannelsRequest) (*proto.RestoreChannelsResponse, error) {
-	err := c.user.RestoreChannels(ctx)
-	if err != nil {
-		return &proto.RestoreChannelsResponse{Accepted: false}, err
-	}
+	c.user.RestoreChannels(ctx)
 	return &proto.RestoreChannelsResponse{Accepted: true}, nil
 }
 

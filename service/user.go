@@ -15,7 +15,6 @@ import (
 	"perun.network/go-perun/watcher"
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
-	bchannel "perun.network/perun-ckb-backend/channel"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
@@ -33,7 +32,6 @@ type User struct {
 
 // HandleUpdate handles a channel update.
 func (u *User) HandleUpdate(_ *channel.State, update client.ChannelUpdate, responder *client.UpdateResponder) {
-	log.Println("Handling channel update as user:", u.Participant)
 	pbNewState, err := protobuf.FromState(update.State.Clone())
 	if err != nil {
 		_ = responder.Reject(context.TODO(), "unable to encode state")
@@ -68,10 +66,6 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 		_ = responder.Reject(context.TODO(), "only ledger channel proposals are supported")
 		return
 	}
-	proposerParticipant := lcp.Participant.(*address.Participant)
-	proposerCKBAddr, _ := proposerParticipant.ToCKBAddress(types.NetworkTest).Encode()
-	log.Printf("User %s got proposal from: %s", addr, proposerCKBAddr)
-	log.Printf("User %s got proposal from %s", u.Participant, proposerParticipant)
 	pLcp, err := protobuf.FromLedgerChannelProposalMsg(lcp)
 	if err != nil {
 		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to encode proposal: %v", err))
@@ -173,21 +167,12 @@ func (u *User) RestoreChannels(ctx context.Context) error {
 }
 
 // OpenChannel opens a new channel with the specified peer.
-func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, peerWalletAddr address.Participant, allocation *channel.Allocation, challengeDuration uint64, tempID channel.Data) (channel.ID, error) {
-	proposalOptsData := client.ProposalOpts{
-		"appData": tempID,
-	}
-	proposalOptsApp := client.ProposalOpts{
-		"app": bchannel.NewDefaultTempApp(),
-	}
+func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, allocation *channel.Allocation, challengeDuration uint64) (channel.ID, error) {
 	proposal, err := client.NewLedgerChannelProposal(
 		challengeDuration,
 		&u.Participant,
 		allocation,
-		[]wire.Address{u.WireAddress, peer},
-		proposalOptsData,
-		proposalOptsApp,
-	)
+		[]wire.Address{u.WireAddress, peer})
 	if err != nil {
 		return channel.ID{}, fmt.Errorf("creating LedgerChannelProposal: %w", err)
 	}

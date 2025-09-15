@@ -1,10 +1,8 @@
 package test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 
 	"github.com/nervosnetwork/ckb-sdk-go/v2/transaction"
@@ -15,7 +13,6 @@ import (
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/perun-ckb-backend/backend"
-	bchannel "perun.network/perun-ckb-backend/channel"
 	"perun.network/perun-ckb-backend/wallet"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
@@ -30,7 +27,6 @@ type MyWalletService struct {
 	signMessageResponseFlag        bool
 	signTransactionResponseFlag    bool
 	updateNotificationCounter      int
-	TempChannelIDMap               map[string]bchannel.TempChannelID
 
 	CurrentState *protobuf.State
 
@@ -39,16 +35,15 @@ type MyWalletService struct {
 
 func NewWalletServiceServer(name string, acc *wallet.Account, privKey *secp256k1.PrivateKey, network types.Network) *MyWalletService {
 	return &MyWalletService{
-		name:             name,
-		account:          acc,
-		privateKey:       privKey,
-		network:          network,
-		TempChannelIDMap: make(map[string]bchannel.TempChannelID),
+		name:       name,
+		account:    acc,
+		privateKey: privKey,
+		network:    network,
 	}
 }
 func (wsc *MyWalletService) OpenChannel(ctx context.Context, in *proto.OpenChannelRequest) (*proto.OpenChannelResponse, error) {
 	if wsc.openChannelResponseFlag {
-		return wsc.openChannelAccepted(in)
+		return openChannelAccepted()
 	} else {
 		return openChannelRejected()
 	}
@@ -59,25 +54,7 @@ func (wsc *MyWalletService) SetOpenChannelResponse(flag bool) {
 	wsc.openChannelResponseFlag = flag
 }
 
-func (wsc *MyWalletService) openChannelAccepted(state *proto.OpenChannelRequest) (*proto.OpenChannelResponse, error) {
-	// check if tempID field has been set and save it if it did
-	data := state.GetProposal().GetBaseChannelProposal().GetInitData()
-
-	if len(data) == 0 {
-		log.Println("No tempID in proposal data")
-	}
-	tempID, err := bchannel.NewTempChannelIDFromBytes(data)
-	if err != nil {
-		log.Println("Error unmarshalling TempChannelID from proposal data", err)
-	}
-	if len(tempID) != bchannel.TempChannelIDLength {
-		return nil, errors.New("invalid TempChannelID length, must be 32 bytes")
-	}
-	// wsc.TempChannelID = tempID
-	wsc.TempChannelIDMap[tempID.String()] = tempID
-
-	log.Println("TempChannelID set in wallet service for ", wsc.name, ":", wsc.TempChannelIDMap[tempID.String()])
-
+func openChannelAccepted() (*proto.OpenChannelResponse, error) {
 	nonceShare := client.WithRandomNonce()["nonce"]
 	// Check if nonceShare is of type [32]byte
 	nonceShareArray, ok := nonceShare.([32]byte)
@@ -136,7 +113,7 @@ func updateNotificationRejected() (*proto.UpdateNotificationResponse, error) {
 
 func (wsc *MyWalletService) SignMessage(ctx context.Context, in *proto.SignMessageRequest) (*proto.SignMessageResponse, error) {
 	if wsc.signMessageResponseFlag {
-		return wsc.signMessageAccepted(in)
+		return wsc.signMessageAccepted(in.Data)
 	} else {
 		return wsc.signMessageRejected()
 	}
@@ -147,24 +124,9 @@ func (wsc *MyWalletService) SetSignMessageResponse(flag bool) {
 	wsc.signMessageResponseFlag = flag
 }
 
-func (wsc *MyWalletService) signMessageAccepted(data *proto.SignMessageRequest) (*proto.SignMessageResponse, error) {
-	tempIDBinary := data.GetTempChannelID()
-	tempID, err := bchannel.NewTempChannelIDFromBytes(tempIDBinary)
-	if err != nil {
-		log.Println("Error converting data to TempChannelID", err)
-		return nil, err
-	}
-	log.Println("TempChannelID in request:", tempID, "for user", wsc.name)
-	log.Println("TempChannelID in wallet service:", wsc.TempChannelIDMap[tempID.String()], "for user", wsc.name)
-	storedTempID := wsc.TempChannelIDMap[tempID.String()]
-	if !bytes.Equal(storedTempID[:], tempID[:]) {
-		return nil, errors.New("TempChannelID in request does not match the one stored in wallet service")
-	}
-	data1 := data.GetData()
-	if len(data1) == 0 {
-		return nil, errors.New("data to be signed is empty")
-	}
-	signedMsg, err := wsc.account.SignData(data1)
+func (wsc *MyWalletService) signMessageAccepted(data []byte) (*proto.SignMessageResponse, error) {
+	//How to sign message
+	signedMsg, err := wsc.account.SignData(data)
 	if err != nil {
 		log.Println("Error signing message", err)
 	}

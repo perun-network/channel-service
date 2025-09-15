@@ -33,11 +33,11 @@ import (
 )
 
 const (
-	rpcNodeURL = "http://localhost:8114"
-	// rpcNodeURL = "https://testnet.ckbapp.dev/"
-	Network   = types.NetworkTest // Network is the network used for testing.
-	devNetDir = "test/devnet"
-	// devNetDir       = "test/testnet"
+	// rpcNodeURL = "http://localhost:8114"
+	rpcNodeURL = "https://testnet.ckbapp.dev/"
+	Network    = types.NetworkTest // Network is the network used for testing.
+	// devNetDir = "test/devnet"
+	devNetDir       = "test/testnet"
 	bufSize         = 1024 * 1024
 	sudtMaxCapacity = 200_00_000_000 // 200 ckb
 )

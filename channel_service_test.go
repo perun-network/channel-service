@@ -14,7 +14,6 @@ import (
 	"perun.network/channel-service/test"
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/wire/protobuf"
-	bchannel "perun.network/perun-ckb-backend/channel"
 )
 
 func TestRestoreChannels(t *testing.T) {
@@ -27,7 +26,6 @@ func TestGetChannels(t *testing.T) {
 	setup := test.NewTestSetup(t)
 	defer setup.WscCleanupFuncs[0]()
 	defer setup.WscCleanupFuncs[1]()
-	channel.RegisterApp(bchannel.NewDefaultTempApp())
 
 	aliceChannelServiceClient := setup.ChannelServiceClients[0]
 	bobChannelServiceClient := setup.ChannelServiceClients[1]
@@ -35,10 +33,6 @@ func TestGetChannels(t *testing.T) {
 	// Bob and alice accept all incoming changes.
 	aliceWalletService := setup.WalletServices[0]
 	bobWalletService := setup.WalletServices[1]
-	tempChannelID, err := bchannel.NewRandomTempChannelID()
-	require.NoError(t, err)
-	require.NotNil(t, tempChannelID)
-	aliceWalletService.TempChannelIDMap[tempChannelID.String()] = tempChannelID
 
 	aliceWalletService.SetOpenChannelResponse(true)
 	aliceWalletService.SetSignMessageResponse(true)
@@ -187,7 +181,6 @@ func runRestoreChannels(t *testing.T) {
 	setup := test.NewTestSetup(t)
 	defer setup.WscCleanupFuncs[0]()
 	defer setup.WscCleanupFuncs[1]()
-	channel.RegisterApp(bchannel.NewDefaultTempApp())
 
 	aliceChannelServiceClient := setup.ChannelServiceClients[0]
 	bobChannelServiceClient := setup.ChannelServiceClients[1]
@@ -195,10 +188,6 @@ func runRestoreChannels(t *testing.T) {
 	// Bob and alice accept all incoming changes.
 	aliceWalletService := setup.WalletServices[0]
 	bobWalletService := setup.WalletServices[1]
-	tempChannelID, err := bchannel.NewRandomTempChannelID()
-	require.NoError(t, err)
-	require.NotNil(t, tempChannelID)
-	aliceWalletService.TempChannelIDMap[tempChannelID.String()] = tempChannelID
 
 	aliceWalletService.SetOpenChannelResponse(true)
 	aliceWalletService.SetSignMessageResponse(true)
@@ -313,116 +302,4 @@ func runRestoreChannels(t *testing.T) {
 	log.Println("Test run sucessfully")
 	setup.ChannelServiceCleanupFuncs[0]()
 	setup.ChannelServiceCleanupFuncs[1]()
-}
-
-func TestTempProposalID(t *testing.T) {
-	setup := test.NewTestSetup(t)
-	defer setup.WscCleanupFuncs[0]()
-	defer setup.WscCleanupFuncs[1]()
-	channel.RegisterApp(bchannel.NewDefaultTempApp())
-	aliceChannelServiceClient := setup.ChannelServiceClients[0]
-	bobChannelServiceClient := setup.ChannelServiceClients[1]
-
-	// Bob and alice accept all incoming changes.
-	aliceWalletService := setup.WalletServices[0]
-	bobWalletService := setup.WalletServices[1]
-
-	tempChannelID, err := bchannel.NewRandomTempChannelID()
-	require.NoError(t, err)
-	require.NotNil(t, tempChannelID)
-	aliceWalletService.TempChannelIDMap[tempChannelID.String()] = tempChannelID
-
-	aliceWalletService.SetOpenChannelResponse(true)
-	aliceWalletService.SetSignMessageResponse(true)
-	aliceWalletService.SetSignTransactionResponse(true)
-
-	bobWalletService.SetOpenChannelResponse(true)
-	bobWalletService.SetSignMessageResponse(true)
-	bobWalletService.SetSignTransactionResponse(true)
-
-	ckbAsset := setup.Asset
-	// sudtAsset := setup.SudtAsset
-	assetsmap := map[channel.Asset]float64{
-		&ckbAsset: 100.0,
-	}
-
-	// Open channel.
-	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
-	require.NoError(t, err)
-	require.NoError(t, err)
-	log.Println("Temp Channel ID (channel-service-test):", tempChannelID[:])
-	aliceChannelOpenRequest.TempChannelID = tempChannelID[:]
-
-	openChannelResp, err := aliceChannelServiceClient.OpenChannel(context.Background(), &aliceChannelOpenRequest)
-	log.Println("Channel Opened")
-	require.NoError(t, err)
-	require.NotNil(t, openChannelResp)
-
-	acp, ok := openChannelResp.Msg.(*proto.ChannelOpenResponse_ChannelId)
-	require.True(t, ok)
-	require.NotNil(t, acp)
-
-	// Wait for channel to be funded.
-	log.Println("Waiting for channel to be funded")
-	time.Sleep(1 * time.Second)
-
-	// Alice sends an update
-	log.Println("Alice sending an update")
-	updateState, err := protobuf.ToState(aliceWalletService.CurrentState)
-	require.NoError(t, err)
-	require.NotNil(t, updateState)
-
-	ammounts := map[channel.Asset]float64{
-		&ckbAsset: 20.0,
-	}
-	aliceChannelUpdateRequest, err := test.NewChannelUpdateRequest([32]byte(acp.ChannelId), updateState, ammounts, 0)
-	require.NoError(t, err)
-	require.NotNil(t, aliceChannelUpdateRequest)
-
-	updateChannelResp, err := aliceChannelServiceClient.UpdateChannel(context.TODO(), aliceChannelUpdateRequest)
-	require.NoError(t, err)
-	require.NotNil(t, updateChannelResp)
-	updateAcp, ok := updateChannelResp.Msg.(*proto.ChannelUpdateResponse_Update)
-	require.True(t, ok)
-	require.Equal(t, updateAcp.Update.ChannelId, acp.ChannelId)
-
-	// Bob sends an update
-	log.Println("Bob sending an update")
-	bobUpdateState, err := protobuf.ToState(bobWalletService.CurrentState)
-	require.NoError(t, err)
-	require.NotNil(t, bobUpdateState)
-	bobAmmounts := map[channel.Asset]float64{
-		&ckbAsset: 10.0,
-	}
-	bobChannelUpdateRequest, err := test.NewChannelUpdateRequest([32]byte(acp.ChannelId), bobUpdateState, bobAmmounts, 1)
-	require.NoError(t, err)
-	require.NotNil(t, bobChannelUpdateRequest)
-	updateChannelResp, err = bobChannelServiceClient.UpdateChannel(context.TODO(), bobChannelUpdateRequest)
-	require.NoError(t, err)
-	require.NotNil(t, updateChannelResp)
-	updateBcp, ok := updateChannelResp.Msg.(*proto.ChannelUpdateResponse_Update)
-	require.True(t, ok)
-	require.Equal(t, updateBcp.Update.ChannelId, acp.ChannelId)
-
-	// Close the channel
-	log.Println("Closing the channel")
-	closeChannelResponse, err := aliceChannelServiceClient.CloseChannel(context.TODO(), test.NewChannelCloseRequest([32]byte(acp.ChannelId)))
-	require.NoError(t, err)
-	require.NotNil(t, closeChannelResponse)
-	closeAcp, ok := closeChannelResponse.Msg.(*proto.ChannelCloseResponse_Close)
-	require.True(t, ok)
-	require.Equal(t, closeAcp.Close.ChannelId, acp.ChannelId)
-
-	// Close perun clients
-	log.Println("Closing Alice's client")
-	_, err = aliceChannelServiceClient.ClosePerunClient(context.TODO(), &proto.ClosePerunClientRequest{})
-	require.NoError(t, err)
-	log.Println("Closing bob's client")
-	_, err = bobChannelServiceClient.ClosePerunClient(context.TODO(), &proto.ClosePerunClientRequest{})
-	require.NoError(t, err)
-
-	log.Println("Test run sucessfully")
-	setup.ChannelServiceCleanupFuncs[0]()
-	setup.ChannelServiceCleanupFuncs[1]()
-
 }

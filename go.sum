@@ -599,11 +599,10 @@ honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWh
 honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 lukechampine.com/blake3 v1.4.0 h1:xDbKOZCVbnZsfzM6mHSYcGRHZ3YrLDzqz8XnV4uaD5w=
 lukechampine.com/blake3 v1.4.0/go.mod h1:MQJNQCTnR+kwOP/JEZSxj3MaQjp80FOFSNMMHXcSeX0=
-perun.network/go-perun v0.12.1-0.20250415090022-4d68d2869b94 h1:m0dJjDt88KINuz/Ig8yJbIU9zb7Xf5mxwTU5gsex03A=
-perun.network/go-perun v0.12.1-0.20250415090022-4d68d2869b94/go.mod h1:uH8iwi75alXDizxxDzH0A+6uqXPbagCpKfl8ECMv/cA=
-perun.network/perun-ckb-backend v0.0.0-20250813142332-80336366ebb5/go.mod h1:rZVrLwKeFeZHaPvmo3WjvDOq3ceCtSII1CGforIoAU4=
-perun.network/perun-ckb-backend v0.0.0-20250813171149-24901659357c h1:43h2352eggW68ra2/nybTUBzVdhc9vDxzQhpziL2ols=
-perun.network/perun-ckb-backend v0.0.0-20250813171149-24901659357c/go.mod h1:rZVrLwKeFeZHaPvmo3WjvDOq3ceCtSII1CGforIoAU4=
+perun.network/go-perun v0.12.0 h1:9Cdk5nHFYkegk+2FbqO9SjvgzUvduVWUiiJXrWkAwBA=
+perun.network/go-perun v0.12.0/go.mod h1:uH8iwi75alXDizxxDzH0A+6uqXPbagCpKfl8ECMv/cA=
+perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166 h1:Y/3rPrDpspxiMDkh43sV7lkmbSDTM+m37e66kDEidR0=
+perun.network/perun-ckb-backend v0.0.0-20240514141411-35bdf3afa166/go.mod h1:Ebp1GCFpmlSlxuP+fSO9yk/qAllF+6GhRCe7b2533zs=
 polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37 h1:iA5GzEa/hHfVlQpimEjPV09NATwHXxSjWNB0VVodtew=
 polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37/go.mod h1:XUBrNtqgEhN3EEOP/5gh7IBd3xVHKidCjXDZfl9+kMU=
 rsc.io/tmplfunc v0.0.3 h1:53XFQh69AfOa8Tw0Jm7t+GV7KZhOi6jzsCzTtKbMvzU=
