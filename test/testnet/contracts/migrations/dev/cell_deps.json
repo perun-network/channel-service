@@ -1,0 +1,32 @@
+{
+    "cell_recipes": [{
+        "name": "pcts",
+        "tx_hash": "0x53a626d4da20647af1a616e97c00aa942dc70c130dddc5cccd17f231b75f201d",
+        "index": 0,
+        "occupied_capacity": 16981300000000,
+        "data_hash": "0xbee5391c58d4c1eeb37838ca39837406aa2fd2c7f65a1222210dd609f876faa7",
+        "type_id": null
+    }, {
+        "name": "pcls",
+        "tx_hash": "0xd196a37a04320b185fba078691ccca65e7ac8d6dba3936218258274af37afb48",
+        "index": 0,
+        "occupied_capacity": 4670100000000,
+        "data_hash": "0x4d86e1541c0b95fb41b7ad2c1b78a543c72187e0a0bbd60e8e8afb1fb3c46744",
+        "type_id": null
+    }, {
+        "name": "pfls",
+        "tx_hash": "0x5a8a6246cda19bc542ee1265de6d5a31a86e9139fb7564af5ae4fbf35c1d93f1",
+        "index": 0,
+        "occupied_capacity": 3441300000000,
+        "data_hash": "0x8c2d2f2f9468cf847823286ac11da09bfaef3e72a8acbac4e457ca4beadedfe4",
+        "type_id": null
+    }, {
+        "name": "sudt",
+        "tx_hash": "0x8067400013eda32e47ee5bfd98758493e80cc6e0dd369d618bc8870a3b1d1eca",
+        "index": 0,
+        "occupied_capacity": 2622100000000,
+        "data_hash": "0x2a8bdd8f9f9877e3243a5ecc4a6b23799db03ec9bdd46b69153842c5ad75d632",
+        "type_id": null
+    }],
+    "dep_group_recipes": []
+}
