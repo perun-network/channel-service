@@ -12,7 +12,7 @@ require (
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 	perun.network/go-perun v0.12.1-0.20250415090022-4d68d2869b94
-	perun.network/perun-ckb-backend v0.0.0-20250813171149-24901659357c
+	perun.network/perun-ckb-backend v0.0.0-20251022105538-5fb128d1b8b9
 	polycry.pt/poly-go v0.0.0-20220301085937-fb9d71b45a37
 )
 

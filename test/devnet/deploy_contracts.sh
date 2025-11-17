@@ -22,6 +22,7 @@ expect "Confirm deployment? (Yes/No)"
 send "Yes\r"
 expect "Password:"
 send "\r"
+sleep 10
 expect eof
 EOF
 
