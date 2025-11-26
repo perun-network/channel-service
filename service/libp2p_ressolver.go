@@ -3,9 +3,9 @@ package service
 import (
 	"errors"
 
-	"github.com/perun-network/perun-libp2p-wire/p2p"
 	"perun.network/go-perun/wallet"
 	"perun.network/go-perun/wire"
+	p2p "perun.network/go-perun/wire/net/libp2p"
 )
 
 var (
@@ -27,7 +27,7 @@ func NewRelayServerResolver(acc *p2p.Account) *RelayServerResolver {
 func (r *RelayServerResolver) GetWireAddress(walletAddr wallet.Address) (wire.Address, error) {
 	waddr, err := r.QueryOnChainAddress(walletAddr)
 	if err != nil {
-		return nil, ErrAddrNotFound
+		return nil, err
 	}
 
 	return waddr, nil

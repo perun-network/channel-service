@@ -11,7 +11,6 @@ import (
 	address2 "github.com/nervosnetwork/ckb-sdk-go/v2/address"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/rpc"
 	"github.com/nervosnetwork/ckb-sdk-go/v2/types"
-	"github.com/perun-network/perun-libp2p-wire/p2p"
 	"perun.network/channel-service/rpc/proto"
 	"perun.network/channel-service/wallet"
 	"perun.network/go-perun/channel"
@@ -20,6 +19,10 @@ import (
 	gpwallet "perun.network/go-perun/wallet"
 	"perun.network/go-perun/watcher/local"
 	"perun.network/go-perun/wire"
+	gpwire "perun.network/go-perun/wire"
+	gpnet "perun.network/go-perun/wire/net"
+	p2p "perun.network/go-perun/wire/net/libp2p"
+	perunio "perun.network/go-perun/wire/perunio/serializer"
 	"perun.network/go-perun/wire/protobuf"
 	"perun.network/perun-ckb-backend/backend"
 	bchannel "perun.network/perun-ckb-backend/channel"
@@ -36,17 +39,23 @@ const (
 	wirePrivateKey = "wire-account-private-key"
 )
 
+type LibP2PNet struct {
+	*gpnet.Bus
+	*p2p.Listener
+	*p2p.Dialer
+}
+
 // ChannelService is the service for handling perun channel operations.
 type ChannelService struct {
 	user       *User
 	wsc        proto.WalletServiceClient
-	net        *p2p.Net
+	net        *LibP2PNet
 	network    types.Network
 	node       rpc.Client
 	deployment backend.Deployment
 	wallet     gpwallet.Wallet
 
-	wireAddr wire.Address
+	wireAddr gpwire.Address
 	resolver AddressResolver
 	pr       persistence.PersistRestorer
 
@@ -91,12 +100,18 @@ func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeU
 		}
 	}
 
-	wireNet, err := p2p.NewP2PBus(wireAcc)
-	if err != nil {
-		return nil, fmt.Errorf("error creating wire net: %w", err)
-	}
+	id := make(map[gpwallet.BackendID]wire.Account)
+	id[address.CKBBackendID] = wireAcc
+	listener := p2p.NewP2PListener(wireAcc)
+	dialer := p2p.NewP2PDialer(wireAcc)
+	bus := gpnet.NewBus(id, dialer, perunio.Serializer())
 
-	go wireNet.Bus.Listen(wireNet.Listener)
+	wireNet := &LibP2PNet{
+		Bus:      bus,
+		Listener: listener,
+		Dialer:   dialer,
+	}
+	go wireNet.Listen(wireNet.Listener)
 
 	if res == nil {
 		res = NewRelayServerResolver(wireAcc)
@@ -111,11 +126,11 @@ func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeU
 
 	for _, p := range ps {
 		// Register peers' LIBP2P address from persistence.
-		peerAddr, ok := p.(*p2p.Address)
+		peerAddr, ok := p[address.CKBBackendID].(*p2p.Address)
 		if !ok {
 			return nil, errors.New("peer address is not a libp2p address")
 		}
-		wireNet.Dialer.Register(p, peerAddr.String())
+		wireNet.Dialer.Register(map[gpwallet.BackendID]gpwire.Address{address.CKBBackendID: peerAddr}, peerAddr.String())
 	}
 
 	cs := &ChannelService{
@@ -165,7 +180,7 @@ func (c ChannelService) OpenChannel(ctx context.Context, request *proto.ChannelO
 	if !ok {
 		return nil, fmt.Errorf("peer address is not a libp2p address")
 	}
-	c.net.Dialer.Register(peerWireAddr, peerLibp2pAddr.String())
+	c.net.Dialer.Register(map[gpwallet.BackendID]gpwire.Address{address.CKBBackendID: peerWireAddr}, peerLibp2pAddr.String())
 
 	challengeDuration := c.GetChallengeDurationFromChannelOpenRequest(request)
 	log.Printf("about to open channel with peer")
@@ -373,7 +388,7 @@ func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, erro
 				SUDT:      nil,
 			}
 		} else {
-			alloc.Assets[i] = channel.NewAsset()
+			alloc.Assets[i] = channel.NewAsset(address.CKBBackendID)
 		}
 		err := alloc.Assets[i].UnmarshalBinary(protoAlloc.Assets[i])
 		if err != nil {
@@ -389,12 +404,12 @@ func toCKBAllocation(protoAlloc *protobuf.Allocation) (*channel.Allocation, erro
 		alloc.Locked[i] = locked
 	}
 	alloc.Balances = protobuf.ToBalances(protoAlloc.Balances)
-
+	alloc.Backends = []gpwallet.BackendID{address.CKBBackendID, address.CKBBackendID}
 	return alloc, nil
 }
 
 // GetPeerAddressFromChannelOpenRequest returns the peer address from the channel open request.
-func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) (wire.Address, address.Participant, error) {
+func (c ChannelService) GetPeerAddressFromChannelOpenRequest(request *proto.ChannelOpenRequest) (gpwire.Address, address.Participant, error) {
 	// NOTE: The peer address should probably be a string-encoded CKB Address (see MakeDefaultWireAddress).
 	peer := request.GetPeer()
 	if peer == nil {
@@ -418,7 +433,7 @@ func (c ChannelService) GetChallengeDurationFromChannelOpenRequest(request *prot
 }
 
 // SetWireAddress sets the wire address for the given participant.
-func (c ChannelService) SetWireAddress(participant address.Participant) (wire.Address, error) {
+func (c ChannelService) SetWireAddress(participant address.Participant) (gpwire.Address, error) {
 	return c.wireAddr, c.resolver.SetWire(&participant, c.wireAddr)
 }
 
@@ -429,14 +444,7 @@ func (c ChannelService) ToCKBAddress(addr address.Participant) address2.Address 
 
 // ClosePerunClient closes the Perun client for the user.
 func (c ChannelService) ClosePerunClient(ctx context.Context, req *proto.ClosePerunClientRequest) (*proto.ClosePerunClientResponse, error) {
-	// Delete the wire
-	err := c.resolver.DeleteWire(&c.user.Participant)
-	if err != nil {
-		log.Fatalf("Error deleting wire: %v", err)
-		return nil, err
-	}
-
-	err = c.user.PerunClient.Close()
+	err := c.user.PerunClient.Close()
 	if err != nil {
 		log.Fatalf("Error closing perun client: %v", err)
 		return nil, err

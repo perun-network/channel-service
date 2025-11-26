@@ -164,7 +164,7 @@ func (wsc *MyWalletService) signMessageAccepted(data *proto.SignMessageRequest) 
 	if len(data1) == 0 {
 		return nil, errors.New("data to be signed is empty")
 	}
-	signedMsg, err := wsc.account.SignData(data1)
+	signedMsg, err := wsc.account.SignData(append(tempID[:], data1...))
 	if err != nil {
 		log.Println("Error signing message", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"perun.network/go-perun/channel/persistence"
 	"perun.network/go-perun/client"
 	"perun.network/go-perun/wallet"
+	gpwallet "perun.network/go-perun/wallet"
 	"perun.network/go-perun/watcher"
 	"perun.network/go-perun/wire"
 	"perun.network/go-perun/wire/protobuf"
@@ -68,7 +69,7 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 		_ = responder.Reject(context.TODO(), "only ledger channel proposals are supported")
 		return
 	}
-	proposerParticipant := lcp.Participant.(*address.Participant)
+	proposerParticipant := lcp.Participant[address.CKBBackendID].(*address.Participant)
 	proposerCKBAddr, _ := proposerParticipant.ToCKBAddress(types.NetworkTest).Encode()
 	log.Printf("User %s got proposal from: %s", addr, proposerCKBAddr)
 	log.Printf("User %s got proposal from %s", u.Participant, proposerParticipant)
@@ -101,7 +102,7 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 			ProposalID: lcp.ProposalID,
 			NonceShare: nonceShare,
 		},
-		Participant: &u.Participant,
+		Participant: map[wallet.BackendID]wallet.Address{address.CKBBackendID: &u.Participant},
 	}
 	ch, err := responder.Accept(context.TODO(), &cpa)
 	if err != nil {
@@ -123,7 +124,13 @@ func (u *User) HandleAdjudicatorEvent(event channel.AdjudicatorEvent) {
 
 // NewUser creates a new user with the specified participant, wire address, bus, funder, adjudicator, wallet, watcher, wallet service client and persistence.
 func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) (*User, error) {
-	c, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	wAddrs := map[gpwallet.BackendID]wire.Address{
+		address.CKBBackendID: wAddr,
+	}
+	wallets := map[gpwallet.BackendID]gpwallet.Wallet{
+		address.CKBBackendID: wallet,
+	}
+	c, err := client.New(wAddrs, bus, funder, adjudicator, wallets, watcher)
 	c.EnablePersistence(pr) //automatically saves channels to persistence
 	if err != nil {
 		return nil, err
@@ -141,7 +148,13 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 
 // NewPerunClient creates a new Perun client for the user.
 func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) {
-	perunClient, err := client.New(wAddr, bus, funder, adjudicator, wallet, watcher)
+	wAddrs := map[gpwallet.BackendID]wire.Address{
+		address.CKBBackendID: wAddr,
+	}
+	wallets := map[gpwallet.BackendID]gpwallet.Wallet{
+		address.CKBBackendID: wallet,
+	}
+	perunClient, err := client.New(wAddrs, bus, funder, adjudicator, wallets, watcher)
 	if err != nil {
 		log.Printf("Erro creating new client for user: %v", err)
 		panic(err)
@@ -182,9 +195,9 @@ func (u *User) OpenChannel(ctxt context.Context, peer wire.Address, peerWalletAd
 	}
 	proposal, err := client.NewLedgerChannelProposal(
 		challengeDuration,
-		&u.Participant,
+		map[gpwallet.BackendID]gpwallet.Address{address.CKBBackendID: &u.Participant},
 		allocation,
-		[]wire.Address{u.WireAddress, peer},
+		[]map[gpwallet.BackendID]wire.Address{{address.CKBBackendID: u.WireAddress}, {address.CKBBackendID: peer}},
 		proposalOptsData,
 		proposalOptsApp,
 	)

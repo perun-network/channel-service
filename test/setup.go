@@ -145,14 +145,6 @@ func setupChannelService(t *testing.T, name string, wsc proto.WalletServiceClien
 	require.NoError(t, err, "Failed to dial bufnet for %s", name)
 
 	return proto.NewChannelServiceClient(conn), cs, func() {
-		err := cs.Close()
-		if err != nil {
-			log.Printf("error closing channel service: %v", err)
-		}
-		err = lis.Close()
-		if err != nil {
-			log.Printf("error closing listener: %v", err)
-		}
 		baseServer.Stop()
 	}
 }
@@ -173,10 +165,6 @@ func (set *Setup) setupWalletService(t *testing.T, name string, ctx context.Cont
 	require.NoError(t, err, "Failed to dial bufnet for %s", name)
 
 	return proto.NewWalletServiceClient(conn), func() {
-		err := lis.Close()
-		if err != nil {
-			log.Printf("error closing listener: %v", err)
-		}
 		baseServer.Stop()
 	}
 }

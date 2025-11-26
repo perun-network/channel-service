@@ -9,12 +9,13 @@ import (
 
 	"perun.network/channel-service/rpc/proto"
 	gpchannel "perun.network/go-perun/channel"
+	gpwallet "perun.network/go-perun/wallet"
 	perunproto "perun.network/go-perun/wire/protobuf"
 	ckbasset "perun.network/perun-ckb-backend/channel/asset"
 	"perun.network/perun-ckb-backend/wallet/address"
 )
 
-func NewChannelOpenRequest(requester address.Participant, peer address.Participant, amounts map[gpchannel.Asset]float64) (proto.ChannelOpenRequest, error) {
+func NewChannelOpenRequest(requester address.Participant, peer address.Participant, amounts map[gpchannel.Asset]float64, tempChannelID []byte) (proto.ChannelOpenRequest, error) {
 	challengeDuration := 10
 	alloc := newAllocation(amounts)
 	protAlloc, err := perunproto.FromAllocation(*alloc)
@@ -36,6 +37,7 @@ func NewChannelOpenRequest(requester address.Participant, peer address.Participa
 		Peer:              peerCkbAddrInBytes,
 		Allocation:        protAlloc,
 		ChallengeDuration: uint64(challengeDuration),
+		TempChannelID:     tempChannelID,
 	}, nil
 }
 
@@ -95,7 +97,7 @@ func newAllocation(amounts map[gpchannel.Asset]float64) *gpchannel.Allocation {
 		i++
 	}
 	// We create an initial allocation which defines the starting balances.
-	initAlloc := gpchannel.NewAllocation(2, assets...)
+	initAlloc := gpchannel.NewAllocation(2, []gpwallet.BackendID{address.CKBBackendID}, assets...)
 	for a, amount := range amounts {
 		switch a := a.(type) {
 		case *ckbasset.Asset:

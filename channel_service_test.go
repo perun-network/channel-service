@@ -38,7 +38,6 @@ func TestGetChannels(t *testing.T) {
 	tempChannelID, err := bchannel.NewRandomTempChannelID()
 	require.NoError(t, err)
 	require.NotNil(t, tempChannelID)
-	aliceWalletService.TempChannelIDMap[tempChannelID.String()] = tempChannelID
 
 	aliceWalletService.SetOpenChannelResponse(true)
 	aliceWalletService.SetSignMessageResponse(true)
@@ -54,7 +53,7 @@ func TestGetChannels(t *testing.T) {
 	}
 
 	// Alice opens channel Open channel.
-	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
+	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap, nil)
 	require.NoError(t, err)
 
 	openChannelResp, err := aliceChannelServiceClient.OpenChannel(context.Background(), &aliceChannelOpenRequest)
@@ -72,7 +71,7 @@ func TestGetChannels(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Bob opens another channel
-	bobChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[1], setup.Participants[0], assetsmap)
+	bobChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[1], setup.Participants[0], assetsmap, nil)
 	require.NoError(t, err)
 	openChannelResp, err = bobChannelServiceClient.OpenChannel(context.Background(), &bobChannelOpenRequest)
 	log.Println("Channel Opened by Bob")
@@ -199,6 +198,7 @@ func runRestoreChannels(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tempChannelID)
 	aliceWalletService.TempChannelIDMap[tempChannelID.String()] = tempChannelID
+	log.Println("Temp Channel ID set in wallet service for Alice:", aliceWalletService.TempChannelIDMap[tempChannelID.String()])
 
 	aliceWalletService.SetOpenChannelResponse(true)
 	aliceWalletService.SetSignMessageResponse(true)
@@ -216,13 +216,13 @@ func runRestoreChannels(t *testing.T) {
 	}
 
 	// Open channel.
-	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
+	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap, nil)
 	require.NoError(t, err)
 
 	openChannelResp, err := aliceChannelServiceClient.OpenChannel(context.Background(), &aliceChannelOpenRequest)
-	log.Println("Channel Opened")
 	require.NoError(t, err)
 	require.NotNil(t, openChannelResp)
+	log.Println("Channel Opened")
 
 	acp, ok := openChannelResp.Msg.(*proto.ChannelOpenResponse_ChannelId)
 	require.True(t, ok)
@@ -347,7 +347,7 @@ func TestTempProposalID(t *testing.T) {
 	}
 
 	// Open channel.
-	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap)
+	aliceChannelOpenRequest, err := test.NewChannelOpenRequest(setup.Participants[0], setup.Participants[1], assetsmap, nil)
 	require.NoError(t, err)
 	require.NoError(t, err)
 	log.Println("Temp Channel ID (channel-service-test):", tempChannelID[:])
