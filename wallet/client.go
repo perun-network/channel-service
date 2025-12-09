@@ -22,7 +22,7 @@ func (e ExternalClient) SignData(participant address.Participant, data []byte) (
 	// TODO: Inject types.NetworkType.
 	addr, err := participant.ToCKBAddress(types.NetworkTest).Encode()
 	if err != nil {
-		panic(fmt.Sprintf("encoding participant addr: %v", err))
+		return nil, fmt.Errorf("encoding participant addr: %v", err)
 	}
 	tempIDBinary := data[0:bchannel.TempChannelIDLength]
 	data1 := data[bchannel.TempChannelIDLength:]

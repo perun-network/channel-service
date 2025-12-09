@@ -22,7 +22,6 @@ import (
 	gpwire "perun.network/go-perun/wire"
 	gpnet "perun.network/go-perun/wire/net"
 	p2p "perun.network/go-perun/wire/net/libp2p"
-	perunio "perun.network/go-perun/wire/perunio/serializer"
 	"perun.network/go-perun/wire/protobuf"
 	"perun.network/perun-ckb-backend/backend"
 	bchannel "perun.network/perun-ckb-backend/channel"
@@ -104,7 +103,7 @@ func NewChannelService(c proto.WalletServiceClient, network types.Network, nodeU
 	id[address.CKBBackendID] = wireAcc
 	listener := p2p.NewP2PListener(wireAcc)
 	dialer := p2p.NewP2PDialer(wireAcc)
-	bus := gpnet.NewBus(id, dialer, perunio.Serializer())
+	bus := gpnet.NewBus(id, dialer, protobuf.Serializer())
 
 	wireNet := &LibP2PNet{
 		Bus:      bus,
@@ -474,7 +473,11 @@ func (c ChannelService) NewPerunClient(ctx context.Context, request *proto.NewPe
 		log.Fatalf("Error creating watcher: %v", err)
 		return &proto.NewPerunClientResponse{Accepted: false}, err
 	}
-	c.user.NewPerunClient(wAddr, c.net.Bus, f, adj, c.wallet, watcher, c.wsc, c.pr)
+	err = c.user.NewPerunClient(wAddr, c.net.Bus, f, adj, c.wallet, watcher, c.wsc, c.pr)
+	if err != nil {
+		log.Fatalf("Error initializing perun client for user: %v", err)
+		return &proto.NewPerunClientResponse{Accepted: false}, err
+	}
 	return &proto.NewPerunClientResponse{Accepted: true}, nil
 }
 

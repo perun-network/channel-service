@@ -60,7 +60,8 @@ func (u *User) HandleUpdate(_ *channel.State, update client.ChannelUpdate, respo
 func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client.ProposalResponder) { // ASSUMPTION: the responder parameter contains the same perun client which this user has
 	addr, err := u.Participant.ToCKBAddress(types.NetworkTest).Encode()
 	if err != nil {
-		panic(fmt.Sprintf("encoding participant addr: %v", err))
+		_ = responder.Reject(context.TODO(), "unable to encode participant addr")
+		return
 	}
 	log.Printf("Handling channel proposal as user: %s", u.Participant)
 	log.Printf("Handling channel proposal as user: %s", addr)
@@ -106,7 +107,8 @@ func (u *User) HandleProposal(proposal client.ChannelProposal, responder *client
 	}
 	ch, err := responder.Accept(context.TODO(), &cpa)
 	if err != nil {
-		panic(err)
+		_ = responder.Reject(context.TODO(), fmt.Sprintf("unable to accept channel proposal: %v", err))
+		return
 	}
 	u.Channels[ch.ID()] = ch
 	u.startWatching(ch)
@@ -147,7 +149,15 @@ func NewUser(participant address.Participant, wAddr wire.Address, bus wire.Bus, 
 }
 
 // NewPerunClient creates a new Perun client for the user.
-func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.Funder, adjudicator channel.Adjudicator, wallet wallet.Wallet, watcher watcher.Watcher, wsc proto.WalletServiceClient, pr persistence.PersistRestorer) {
+func (u *User) NewPerunClient(
+	wAddr wire.Address,
+	bus wire.Bus,
+	funder channel.Funder,
+	adjudicator channel.Adjudicator,
+	wallet wallet.Wallet,
+	watcher watcher.Watcher,
+	wsc proto.WalletServiceClient,
+	pr persistence.PersistRestorer) error {
 	wAddrs := map[gpwallet.BackendID]wire.Address{
 		address.CKBBackendID: wAddr,
 	}
@@ -156,12 +166,12 @@ func (u *User) NewPerunClient(wAddr wire.Address, bus wire.Bus, funder channel.F
 	}
 	perunClient, err := client.New(wAddrs, bus, funder, adjudicator, wallets, watcher)
 	if err != nil {
-		log.Printf("Erro creating new client for user: %v", err)
-		panic(err)
+		return fmt.Errorf("creating perun client: %w", err)
 	}
 	perunClient.EnablePersistence(pr)
 	go perunClient.Handle(u, u)
 	u.PerunClient = perunClient
+	return nil
 }
 
 // RestoreChannels restores all channels for the user.
@@ -265,14 +275,14 @@ func (u *User) CloseChannel(ctxt context.Context, id channel.ID) error {
 			state.IsFinal = true
 		})
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("finalizing channel: %w", err)
 		}
 	}
 
 	// Settle concludes the channel and withdraws the funds.
 	err := ch.Settle(ctxt, false)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("settling channel: %w", err)
 	}
 
 	// Close frees up channel resources.
@@ -306,16 +316,16 @@ func (u *User) GetChannels() ([]channel.State, []channel.Index) {
 func (u *User) NotifyAllState(_, to *channel.State) {
 	pbNewState, err := protobuf.FromState(to.Clone())
 	if err != nil {
-		panic(fmt.Sprintf("unable to encode state: %v", err))
+		log.Fatalf("unable to encode state: %v", err)
 	}
 
 	resp, err := u.wsc.UpdateNotification(context.TODO(), &proto.UpdateNotificationRequest{
 		State: pbNewState,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("unable to send update notification to wallet: %v", err))
+		log.Fatalf("unable to send update notification to wallet: %v", err)
 	}
 	if !resp.GetAccepted() {
-		panic("wallet rejected update")
+		log.Fatalf("wallet rejected update")
 	}
 }
